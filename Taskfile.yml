@@ -1,0 +1,59 @@
+version: '3'
+
+tasks:
+  default:
+    cmds:
+      - task: help
+
+  help:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  test:
+    desc: Run race tests and SDK conformance
+    cmds:
+      - go test -race -count=1 ./...
+      - go -C server test -race -count=1 ./...
+
+  vet:
+    desc: Run go vet for the driver and server
+    cmds:
+      - go vet ./...
+      - go -C server vet ./...
+
+  check:
+    desc: Run race tests, SDK conformance and go vet
+    cmds:
+      - task: test
+      - task: vet
+
+  up:
+    desc: Build and start the local Docker server
+    cmds:
+      - docker compose up --build -d --wait
+
+  down:
+    desc: Stop containers, preserving printer records
+    cmds:
+      - docker compose down
+
+  logs:
+    desc: Follow server logs
+    cmds:
+      - docker compose logs -f prusa-connect
+
+  probe:
+    desc: Read printer telemetry from the running container
+    cmds:
+      - docker compose exec -T prusa-connect /usr/local/bin/pandalink-probe -duration 10s
+
+  smoke:
+    desc: Check the UI assets, live API and status refresh
+    cmds:
+      - python3 scripts/smoke.py
+
+  acceptance:
+    desc: Check live API descriptors, safe refusals, AMS 3H inventory and FTPS browsing
+    cmds:
+      - python3 scripts/smoke.py --acceptance

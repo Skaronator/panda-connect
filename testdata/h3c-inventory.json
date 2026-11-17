@@ -1,0 +1,29 @@
+{
+  "print": {
+    "command": "push_status", "msg": 0, "gcode_state": "IDLE",
+    "ams": {
+      "tray_exist_bits": "1010000000",
+      "ams": [{"id": "32", "tray": [
+        {"id":"0","tray_type":"PLA","tray_color":"112233FF","nozzle_temp_min":"190","nozzle_temp_max":"240"},
+        {"id":"8","tray_type":"PETG","tray_color":"AABBCCFF"}
+      ], "zone_info": [
+        {"zone_id":0,"zone_slots":[5,7],"humidity_raw":"25","humidity":"2","temp":"55.5","dry_time":60,"zone_dry_info":"1"},
+        {"zone_id":1,"zone_slots":[0,1,2,3,4,6,8],"humidity_raw":"40","humidity":"3","temp":"30","zone_dry_info":"0"}
+      ]}]
+    },
+    "device": {
+      "nozzle": {"hc":511,"exist":16711681,"info":[
+        {"id":16,"addr_id":0,"snow":8192,"type":"HH01","diameter":0.4,"tm":350,"temp":25},
+        {"id":17,"addr_id":1,"snow":65279,"type":"HS01","diameter":0.4,"temp":25},
+        {"id":18,"addr_id":2,"snow":65023,"type":"HH01","diameter":0.6,"temp":25},
+        {"id":19,"addr_id":3,"snow":64767,"type":"HS01","diameter":0.4,"temp":25},
+        {"id":20,"addr_id":4,"snow":64511,"type":"HS01","diameter":0.4,"temp":25},
+        {"id":21,"addr_id":5,"snow":64255,"type":"HS01","diameter":0.4,"temp":25},
+        {"id":22,"addr_id":6,"snow":63999,"type":"HS01","diameter":0.4,"temp":25},
+        {"id":23,"addr_id":7,"snow":63488,"type":"HT01","diameter":0.4,"temp":25},
+        {"id":0,"addr_id":8,"snow":8200,"type":"HS01","diameter":0.4,"tm":350,"temp":14418125}
+      ]},
+      "extruder":{"info":[{"id":0,"hnow":0,"snow":8200,"temp":14418125}]}
+    }
+  }
+}

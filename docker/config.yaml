@@ -1,0 +1,32 @@
+# Local development only: Compose publishes this server on loopback.
+persistence:
+  type: sqlite
+core:
+  api:
+    addr: ":8080"
+  connectors:
+    pandalink:
+      type: pandalink
+      enabled: true
+      config:
+        timeout: 15s
+        stale_after: 2m
+  frontend:
+    enabled: true
+    title: "PandaLink — local test"
+  authz:
+    database: /data/config.d/authz.db
+  overlay: /data/config.d/resources.json
+  modules: /data/modules
+  principal: operator
+  discovery:
+    enabled: false
+  time_server:
+    enabled: false
+  marketplace:
+    enabled: false
+  upgrade:
+    enabled: false
+  log:
+    level: info
+    format: text

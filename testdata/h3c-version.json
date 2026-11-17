@@ -1,0 +1,1 @@
+{"info":{"command":"get_version","sequence_id":"7101","module":[{"name":"ota","product_name":"Bambu Lab H3C","sn":"H3C-TEST-001","sw_ver":"01.01.03.00"},{"name":"ap2","hw_ver":"AP05","sn":"H3C-TEST-001","sw_ver":"00.00.66.71"},{"name":"n10a","id":32,"product_name":"AMS 3H","sn":"AMS-TEST-001","sw_ver":"02.00.32.82"}]}}

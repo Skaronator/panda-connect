@@ -172,6 +172,28 @@ tests against TLS MQTT, FTPS and RTSP fakes. `testdata/` contains reduced,
 sanitized captures and labeled synthetic reports. `scripts/smoke.py` checks the live host without sending
 physical controls.
 
+### CI and releases
+
+GitHub Actions runs race tests, `gofmt` checks and `go vet` for both Go modules,
+then builds the container for `linux/amd64` and `linux/arm64` on PRs to `main`
+and pushes to `main`.
+PR builds never publish an image.
+
+Release Please uses [Conventional Commits](https://www.conventionalcommits.org/)
+such as `feat:` and `fix:` to open a release PR. Merge that PR to create a
+GitHub release and publish `ghcr.io/skaronator/pandalink` with the release tag
+(such as `v1.2.3`) and `latest`. Both tags support AMD64 and ARM64; Docker
+selects the matching image when you pull.
+
+To use the built-in `GITHUB_TOKEN`, enable **Allow GitHub Actions to create and
+approve pull requests** in **Settings → Actions → General**. A maintainer may
+need to approve CI runs on bot-created release PRs. For automatic release PR
+checks, set a `RELEASE_PLEASE_TOKEN` Actions secret with contents, issues and
+pull request write access. GHCR publishing still uses `GITHUB_TOKEN`. If the
+package is private, make it public in its package settings for anonymous pulls.
+If publication fails after the release is created, use **Re-run failed jobs**
+to retry it without recreating the release.
+
 ### Pinned dependencies
 
 - Driver SDK: `github.com/prusa3d/prusa-connect/sdk v0.1.0-beta.1`
@@ -187,6 +209,8 @@ the upstream server nor SDK is replaced with a local directory.
 `internal/bambu/` owns the driver, sessions, and model capabilities.
 `internal/telemetry/` parses reports, `internal/ftps/` handles file transport,
 and `internal/mqttwire/` enforces MQTT frame limits.
+`server/internal/bambucamera/` wraps Prusa Connect’s RTSP adapter and stays in
+the server module so importing the driver does not pull in the full host.
 
 The Dockerfile builds the upstream frontend from a checksum-pinned archive at
 that same commit. It embeds the generated assets into the image's private Go

@@ -6,7 +6,7 @@ import (
 
 	"github.com/prusa3d/prusa-connect/compose"
 	_ "github.com/skaronator/pandalink"
-	_ "github.com/skaronator/pandalink/server/internal/h3ccamera"
+	_ "github.com/skaronator/pandalink/server/internal/bambucamera"
 )
 
 func main() { os.Exit(compose.Main()) }

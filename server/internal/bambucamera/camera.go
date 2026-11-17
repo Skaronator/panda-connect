@@ -1,6 +1,6 @@
-// Package h3ccamera adds explicit TLS trust to the released host RTSP adapter.
+// Package bambucamera adds explicit TLS trust to the released host RTSP adapter.
 // Authorization and WebRTC remain host responsibilities.
-package h3ccamera
+package bambucamera
 
 import (
 	"bufio"
@@ -21,13 +21,14 @@ import (
 	"github.com/skaronator/pandalink/internal/secret"
 )
 
-const Type = "pandalink-h3c"
+const Type = "pandalink-rtsps"
+const legacyType = "pandalink-h3c" // Existing host camera records keep their type.
 
-var errCamera = errors.New("H3C local camera unavailable; check LAN liveview, access-code file and camera certificate trust")
+var errCamera = errors.New("Bambu local camera unavailable; check LAN liveview, access-code file and camera certificate trust")
 
 func init() {
-	cameraapi.Register(Type, extension.Doc{
-		Summary:     "H3C local H.264 liveview with explicit TLS certificate trust.",
+	doc := extension.Doc{
+		Summary:     "Bambu local H.264 RTSPS liveview with explicit TLS certificate trust.",
 		Description: "Uses the released RTSP adapter and host authorization. Offers H.264 WebRTC and, when FFmpeg is installed, HTTP MJPEG for browsers without a WebRTC media path. No snapshots or H.265 conversion.",
 		Version:     "0.2.0", Contract: cameraapi.Contract, Stability: extension.StabilityExperimental,
 		Options: []extension.Option{
@@ -37,7 +38,10 @@ func init() {
 			{Key: "ca_file", Type: extension.OptionString, Summary: "Alternative PEM trust bundle; normal hostname/IP verification applies."},
 			{Key: "tls_server_name", Type: extension.OptionString, Summary: "Expected certificate name with CA verification."},
 		},
-	}, New)
+	}
+	cameraapi.Register(Type, doc, New)
+	doc.Summary = "Compatibility alias for existing PandaLink H3C cameras."
+	cameraapi.Register(legacyType, doc, New)
 }
 
 type Camera struct {
@@ -52,7 +56,7 @@ var _ cameraapi.Camera = (*Camera)(nil)
 
 func New(spec cameraapi.ProviderSpec) (cameraapi.Camera, error) {
 	if spec.Printer == "" {
-		return nil, errors.New("H3C camera must be bound to a printer for host authorization")
+		return nil, errors.New("Bambu camera must be bound to a printer for host authorization")
 	}
 	options := map[string]string{}
 	for k, v := range spec.Config {
@@ -65,20 +69,20 @@ func New(spec cameraapi.ProviderSpec) (cameraapi.Camera, error) {
 		switch k {
 		case "address", "access_code_file", "tls_fingerprint", "ca_file", "tls_server_name":
 		default:
-			return nil, errors.New("unsupported H3C camera option; URLs and inline credentials are not accepted")
+			return nil, errors.New("unsupported Bambu camera option; URLs and inline credentials are not accepted")
 		}
 		text, ok := v.(string)
 		if !ok {
-			return nil, errors.New("H3C camera options must be strings")
+			return nil, errors.New("Bambu camera options must be strings")
 		}
 		options[k] = text
 	}
 	ip := net.ParseIP(options["address"])
 	if ip == nil || (!ip.IsPrivate() && !ip.IsLoopback()) || ip.IsUnspecified() {
-		return nil, errors.New("H3C camera address must be a private LAN IP")
+		return nil, errors.New("Bambu camera address must be a private LAN IP")
 	}
 	if options["access_code_file"] == "" {
-		return nil, errors.New("H3C camera requires access_code_file")
+		return nil, errors.New("Bambu camera requires access_code_file")
 	}
 	cfg, err := printertls.Config(options)
 	if err != nil {

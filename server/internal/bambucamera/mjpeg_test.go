@@ -1,4 +1,4 @@
-package h3ccamera
+package bambucamera
 
 import (
 	"bytes"

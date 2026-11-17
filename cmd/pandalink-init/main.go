@@ -48,7 +48,7 @@ func initialize(data, template string, getenv func(string) string) error {
 		"version": 1, "instances": []any{},
 		"auth": map[string]string{"mode": "open"}, "admission": map[string]string{"mode": "open"},
 		"endpoints": []any{map[string]any{
-			"name": "bambu-h3c", "connector": "pandalink", "address": address, "enabled": true,
+			"name": "bambu-printer", "connector": "pandalink", "address": address, "enabled": true,
 			"options": map[string]string{"serial": serial, "access_code_file": "/run/secrets/bambu_access_code", "tls_fingerprint": pin},
 		}},
 	}

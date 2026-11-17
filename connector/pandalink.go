@@ -1,6 +1,6 @@
-// Package pandalink registers the local Bambu Lab connector with Prusa
+// Package connector registers the local Bambu Lab connector with Prusa
 // Connect. Protocol details live in internal/bambu.
-package pandalink
+package connector
 
 import (
 	"time"

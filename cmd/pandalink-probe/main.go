@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
-	"github.com/skaronator/pandalink"
+	"github.com/skaronator/pandalink/connector"
 )
 
 func main() {
@@ -60,7 +60,7 @@ func inspectCertificate(ctx context.Context, address string) error {
 }
 
 func probe(ctx context.Context, address, serial, codeFile, pin string, duration time.Duration) error {
-	driver := pandalink.NewDriver(0)
+	driver := connector.NewDriver(0)
 	session, err := driver.Connect(ctx, connectorapi.Endpoint{Address: address, Options: map[string]string{
 		"serial": serial, "access_code_file": codeFile, "tls_fingerprint": pin,
 	}}, driver.Baseline())

@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/prusa3d/prusa-connect/compose"
-	_ "github.com/skaronator/pandalink"
+	_ "github.com/skaronator/pandalink/connector"
 	_ "github.com/skaronator/pandalink/server/internal/bambucamera"
 )
 

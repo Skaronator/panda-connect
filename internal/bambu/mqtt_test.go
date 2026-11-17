@@ -1,4 +1,4 @@
-package h3c
+package bambu
 
 import (
 	"bufio"
@@ -31,6 +31,7 @@ type fakePrinter struct {
 	quiet           atomic.Bool
 	requests        atomic.Uint64
 	version, report []byte
+	serial          string
 	control         func(*fakeConnection, map[string]json.RawMessage)
 	certificate     tls.Certificate
 }
@@ -42,6 +43,11 @@ type fakeConnection struct {
 
 func startFake(t *testing.T) *fakePrinter {
 	t.Helper()
+	return startModelFake(t, "H3C-TEST-001", "h3c-version.json", "h3c-running.json")
+}
+
+func startModelFake(t *testing.T, serial, version, report string) *fakePrinter {
+	t.Helper()
 	certificateServer := httptest.NewTLSServer(nil)
 	cert := certificateServer.TLS.Certificates[0]
 	certificateServer.Close()
@@ -49,7 +55,7 @@ func startFake(t *testing.T) *fakePrinter {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fakePrinter{listener: listener, connections: make(map[*fakeConnection]bool), version: fixture(t, "h3c-version.json"), report: fixture(t, "h3c-running.json")}
+	f := &fakePrinter{listener: listener, connections: make(map[*fakeConnection]bool), serial: serial, version: fixture(t, version), report: fixture(t, report)}
 	f.certificate = cert
 	codeFile := filepath.Join(t.TempDir(), "access_code")
 	if err = os.WriteFile(codeFile, []byte("test-code\n"), 0600); err != nil {
@@ -57,7 +63,7 @@ func startFake(t *testing.T) *fakePrinter {
 	}
 	sum := sha256.Sum256(cert.Certificate[0])
 	f.endpoint = connectorapi.Endpoint{Address: listener.Addr().String(), Options: map[string]string{
-		"serial": "H3C-TEST-001", "access_code_file": codeFile, "tls_fingerprint": hex.EncodeToString(sum[:]),
+		"serial": serial, "access_code_file": codeFile, "tls_fingerprint": hex.EncodeToString(sum[:]),
 	}}
 	f.wg.Add(1)
 	go func() {
@@ -127,7 +133,7 @@ func (f *fakePrinter) serve(t *testing.T, c *fakeConnection) {
 			if err != nil {
 				return
 			}
-			if topic != "device/H3C-TEST-001/request" {
+			if topic != "device/"+f.serial+"/request" {
 				t.Error("unexpected request topic")
 				return
 			}
@@ -166,7 +172,7 @@ func (f *fakePrinter) serve(t *testing.T, c *fakeConnection) {
 }
 
 func (f *fakePrinter) sendTo(c *fakeConnection, frame []byte) error {
-	topic := "device/H3C-TEST-001/report"
+	topic := "device/" + f.serial + "/report"
 	return c.send(0x30, append(append([]byte{byte(len(topic) >> 8), byte(len(topic))}, topic...), frame...))
 }
 

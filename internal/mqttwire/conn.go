@@ -1,14 +1,18 @@
-package h3c
+// Package mqttwire bounds MQTT frames before the MQTT client allocates them.
+package mqttwire
 
 import (
 	"errors"
 	"net"
 )
 
-// Paho allocates from MQTT's advertised remaining length before its callback.
+// MaxPayloadBytes is the largest printer report accepted by the driver.
+const MaxPayloadBytes = 256 << 10
+
+// Conn checks MQTT's advertised remaining length before Paho can allocate it.
 // Check the fixed header before releasing its last length byte to the library.
 // Only Paho's single reader touches this state; writes go straight to TLS.
-type boundedMQTTConn struct {
+type Conn struct {
 	net.Conn
 	body          int
 	length        int
@@ -16,7 +20,7 @@ type boundedMQTTConn struct {
 	readingLength bool
 }
 
-func (c *boundedMQTTConn) Read(p []byte) (int, error) {
+func (c *Conn) Read(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
@@ -36,7 +40,7 @@ func (c *boundedMQTTConn) Read(p []byte) (int, error) {
 	}
 	c.length |= int(p[0]&127) << (7 * c.digits)
 	c.digits++
-	if c.length > maxFrameBytes+256 || c.digits == 4 && p[0]&128 != 0 {
+	if c.length > MaxPayloadBytes+256 || c.digits == 4 && p[0]&128 != 0 {
 		return 0, errors.New("MQTT frame exceeds PandaLink's limit or has an invalid length")
 	}
 	if p[0]&128 == 0 {

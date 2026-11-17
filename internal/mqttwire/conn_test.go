@@ -1,4 +1,4 @@
-package h3c
+package mqttwire
 
 import (
 	"bytes"
@@ -23,14 +23,14 @@ func (byteConn) SetWriteDeadline(time.Time) error { return nil }
 func TestMQTTFrameLimit(t *testing.T) {
 	t.Run("multiple frames", func(t *testing.T) {
 		wire := []byte{0x30, 3, 1, 2, 3, 0xd0, 0, 0x30, 1, 4}
-		conn := &boundedMQTTConn{Conn: byteConn{bytes.NewReader(wire)}}
+		conn := &Conn{Conn: byteConn{bytes.NewReader(wire)}}
 		got, err := io.ReadAll(conn)
 		if err != nil || !bytes.Equal(got, wire) {
 			t.Fatalf("changed MQTT bytes: %x %v", got, err)
 		}
 	})
 	t.Run("oversized advertised length", func(t *testing.T) {
-		conn := &boundedMQTTConn{Conn: byteConn{bytes.NewReader([]byte{0x30, 0xff, 0xff, 0x7f})}}
+		conn := &Conn{Conn: byteConn{bytes.NewReader([]byte{0x30, 0xff, 0xff, 0x7f})}}
 		got, err := io.ReadAll(conn)
 		if err == nil || len(got) != 3 {
 			t.Fatalf("released the oversized length: %x %v", got, err)

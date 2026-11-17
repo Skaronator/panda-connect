@@ -1,4 +1,4 @@
-package h3c
+package telemetry
 
 import (
 	"encoding/json"
@@ -6,8 +6,8 @@ import (
 )
 
 func TestInventoryAndStableHomeIDs(t *testing.T) {
-	var parser telemetry
-	patches, _, _, err := parser.parse(fixture(t, "h3c-inventory.json"))
+	var parser H3C
+	patches, _, _, err := parser.Parse(fixture(t, "h3c-inventory.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +25,7 @@ func TestInventoryAndStableHomeIDs(t *testing.T) {
 			t.Errorf("%s = %s want %s", p, values[p], want)
 		}
 	}
-	patches, _, _, err = parser.parse([]byte(`{"print":{"command":"push_status","device":{"nozzle":{"exist":33423361,"info":[{"id":24,"addr_id":8},{"id":0,"addr_id":0}]}},"nozzle_temper":30,"nozzle_target_temper":0}}`))
+	patches, _, _, err = parser.Parse([]byte(`{"print":{"command":"push_status","device":{"nozzle":{"exist":33423361,"info":[{"id":24,"addr_id":8},{"id":0,"addr_id":0}]}},"nozzle_temper":30,"nozzle_target_temper":0}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,9 +41,9 @@ func TestInventoryAndStableHomeIDs(t *testing.T) {
 	}
 }
 func TestInventoryDeltaRemovalAndReconnect(t *testing.T) {
-	var parser telemetry
-	_, _, _, _ = parser.parse(fixture(t, "h3c-inventory.json"))
-	patches, _, _, err := parser.parse([]byte(`{"print":{"command":"push_status","ams":{"tray_exist_bits":"1000000000","ams":[{"id":"32","zone_info":[{"zone_id":0,"temp":"60"}]}]},"device":{"nozzle":{"hc":255}}}}`))
+	var parser H3C
+	_, _, _, _ = parser.Parse(fixture(t, "h3c-inventory.json"))
+	patches, _, _, err := parser.Parse([]byte(`{"print":{"command":"push_status","ams":{"tray_exist_bits":"1000000000","ams":[{"id":"32","zone_info":[{"zone_id":0,"temp":"60"}]}]},"device":{"nozzle":{"hc":255}}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,32 +56,32 @@ func TestInventoryDeltaRemovalAndReconnect(t *testing.T) {
 	if _, exists := values["/bambu/ams/32/zones/0/humidity"]; exists {
 		t.Fatal("partial zone update changed humidity")
 	}
-	patches, _, _, err = parser.parse([]byte(`{"print":{"command":"push_status","ams":{"tray_exist_bits":"1010000000","ams":[{"id":"32","tray":[{"id":"0","tray_type":"ABS"}]}]}}}`))
+	patches, _, _, err = parser.Parse([]byte(`{"print":{"command":"push_status","ams":{"tray_exist_bits":"1010000000","ams":[{"id":"32","tray":[{"id":"0","tray_type":"ABS"}]}]}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if raw := parser.inventory.previous["/tools/0.0/material_package_instance/package/material/primary_color/color_rgba"]; len(raw) != 0 {
 		t.Fatal("old spool color returned after reinsertion")
 	}
-	var reconnected telemetry
-	fresh, _, _, _ := reconnected.parse(fixture(t, "h3c-inventory.json"))
+	var reconnected H3C
+	fresh, _, _, _ := reconnected.Parse(fixture(t, "h3c-inventory.json"))
 	if patchValues(fresh)["/bambu/active_tool"] != `"8"` {
 		t.Fatal("reconnect changed home IDs")
 	}
-	_, _, _, err = parser.parse([]byte(`{"print":{"command":"push_status","ams":{"tray_exist_bits":"not-hex"}}}`))
+	_, _, _, err = parser.Parse([]byte(`{"print":{"command":"push_status","ams":{"tray_exist_bits":"not-hex"}}}`))
 	if err == nil {
 		t.Fatal("accepted bad tray bits")
 	}
 	_ = patches
 }
 func TestPackedNozzleWinsOverStaleScalar(t *testing.T) {
-	var parser telemetry
-	_, _, _, _ = parser.parse(fixture(t, "h3c-running.json"))
-	patches, _, _, _ := parser.parse([]byte(`{"print":{"command":"push_status","nozzle_temper":30,"nozzle_target_temper":0}}`))
+	var parser H3C
+	_, _, _, _ = parser.Parse(fixture(t, "h3c-running.json"))
+	patches, _, _, _ := parser.Parse([]byte(`{"print":{"command":"push_status","nozzle_temper":30,"nozzle_target_temper":0}}`))
 	if _, ok := patchValues(patches)["/tools/0/nozzle_temp"]; ok {
 		t.Fatal("stale scalar replaced mounted extruder temperature")
 	}
-	patches, _, _, _ = parser.parse([]byte(`{"print":{"command":"push_status","nozzle_temper":30,"device":{"extruder":{"info":[{"id":0,"temp":14418125}]}}}}`))
+	patches, _, _, _ = parser.Parse([]byte(`{"print":{"command":"push_status","nozzle_temper":30,"device":{"extruder":{"info":[{"id":0,"temp":14418125}]}}}}`))
 	if patchValues(patches)["/tools/0/nozzle_temp"] != "205" {
 		b, _ := json.Marshal(patches)
 		t.Fatal(string(b))
@@ -89,11 +89,11 @@ func TestPackedNozzleWinsOverStaleScalar(t *testing.T) {
 }
 
 func TestFullReportClearsOmittedTopologyAndState(t *testing.T) {
-	var parser telemetry
-	if _, _, _, err := parser.parse(fixture(t, "h3c-inventory.json")); err != nil {
+	var parser H3C
+	if _, _, _, err := parser.Parse(fixture(t, "h3c-inventory.json")); err != nil {
 		t.Fatal(err)
 	}
-	patches, full, _, err := parser.parse([]byte(`{"print":{"command":"push_status","msg":0}}`))
+	patches, full, _, err := parser.Parse([]byte(`{"print":{"command":"push_status","msg":0}}`))
 	if err != nil || !full {
 		t.Fatalf("full report: %v %v", full, err)
 	}
@@ -109,15 +109,15 @@ func TestFullReportClearsOmittedTopologyAndState(t *testing.T) {
 }
 
 func TestAmbiguousTrayAndRemovedAMSInvalidateMaterial(t *testing.T) {
-	var parser telemetry
-	if _, _, _, err := parser.parse(fixture(t, "h3c-inventory.json")); err != nil {
+	var parser H3C
+	if _, _, _, err := parser.Parse(fixture(t, "h3c-inventory.json")); err != nil {
 		t.Fatal(err)
 	}
-	patches, _, _, err := parser.parse([]byte(`{"print":{"command":"push_status","ams":{"ams":[{"id":"32","tray":[{"id":"0","tray_type":"PLA"},{"id":"0","tray_type":"ABS"}]}]}}}`))
+	patches, _, _, err := parser.Parse([]byte(`{"print":{"command":"push_status","ams":{"ams":[{"id":"32","tray":[{"id":"0","tray_type":"PLA"},{"id":"0","tray_type":"ABS"}]}]}}}`))
 	if err != nil || patchValues(patches)["/tools/0.0/material_package_instance/package/material/type"] != "null" {
 		t.Fatalf("ambiguous tray stayed mapped: %v", err)
 	}
-	patches, _, _, err = parser.parse([]byte(`{"print":{"command":"push_status","ams":{"ams":[{"id":"1"}]}}}`))
+	patches, _, _, err = parser.Parse([]byte(`{"print":{"command":"push_status","ams":{"ams":[{"id":"1"}]}}}`))
 	if err != nil || patchValues(patches)["/bambu/ams/32/slots/8/present"] != "null" {
 		t.Fatalf("missing AMS kept its data: %v", err)
 	}

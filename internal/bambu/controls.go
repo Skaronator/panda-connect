@@ -1,4 +1,4 @@
-package h3c
+package bambu
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
+	"github.com/skaronator/pandalink/internal/telemetry"
 )
 
 const (
@@ -18,7 +19,7 @@ const (
 	VerbBedTemperature    connectorapi.Capability = "core.command.set_bed_temperature"
 	VerbStartPrint        connectorapi.Capability = "core.command.start_print"
 	// Manufacturer's H3C limits, not the legacy P1/X1 limits. See docs/protocol.md.
-	MaxNozzleTemperature = 350
+	MaxNozzleTemperature = telemetry.H3CMaxNozzleTemperature
 	MaxBedTemperature    = 120
 )
 
@@ -33,14 +34,21 @@ type receivedFrame struct {
 	at   time.Time
 }
 
-func controlCapabilities() connectorapi.Set {
+func (m modelProfile) capabilities() connectorapi.Set {
 	caps := connectorapi.Set{VerbSendStateInfo: {Flag: true}}
-	caps[VerbStartPrint] = connectorapi.Value{Flag: true}
-	caps[connectorapi.ArgumentKey(VerbStartPrint, "path")] = connectorapi.Value{Flag: true, Kind: connectorapi.KindString, Required: true, HasLimit: true, Limit: 1024}
-	caps[connectorapi.ArgumentKey(VerbStartPrint, "tool_mapping")] = connectorapi.Value{Flag: true, Kind: connectorapi.KindOpaque}
-	caps[connectorapi.ArgumentKey(connectorapi.VerbSendFileInfo, "path")] = connectorapi.Value{Flag: true, Kind: connectorapi.KindString, Required: true, HasLimit: true, Limit: 1024}
-	for _, verb := range []connectorapi.Capability{connectorapi.VerbSendInfo, connectorapi.VerbSendFileInfo, connectorapi.VerbFileUpload} {
-		caps[verb] = connectorapi.Value{Flag: true}
+	if m.dispatch {
+		caps[VerbStartPrint] = connectorapi.Value{Flag: true}
+		caps[connectorapi.ArgumentKey(VerbStartPrint, "path")] = connectorapi.Value{Flag: true, Kind: connectorapi.KindString, Required: true, HasLimit: true, Limit: 1024}
+		caps[connectorapi.ArgumentKey(VerbStartPrint, "tool_mapping")] = connectorapi.Value{Flag: true, Kind: connectorapi.KindOpaque}
+	}
+	if m.storage {
+		caps[connectorapi.ArgumentKey(connectorapi.VerbSendFileInfo, "path")] = connectorapi.Value{Flag: true, Kind: connectorapi.KindString, Required: true, HasLimit: true, Limit: 1024}
+		for _, verb := range []connectorapi.Capability{connectorapi.VerbSendInfo, connectorapi.VerbSendFileInfo, connectorapi.VerbFileUpload} {
+			caps[verb] = connectorapi.Value{Flag: true}
+		}
+	}
+	if !m.controls {
+		return caps
 	}
 	for _, verb := range []connectorapi.Capability{VerbPausePrint, VerbResumePrint, VerbStopPrint, VerbNozzleTemperature, VerbBedTemperature} {
 		caps[verb] = connectorapi.Value{Flag: true}

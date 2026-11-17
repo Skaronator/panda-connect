@@ -1,9 +1,8 @@
-package h3c
+package bambu
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"sort"
 	"sync"
@@ -12,11 +11,20 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
+	"github.com/skaronator/pandalink/internal/telemetry"
 )
 
 type identityAnswer struct {
 	identity connectorapi.Identity
+	model    modelProfile
 	err      error
+}
+
+// Embed only the core SDK interfaces, not the optional H3C file interfaces.
+type monitorSession struct {
+	connectorapi.Session
+	connectorapi.CountsLink
+	connectorapi.ReportsProbe
 }
 
 // Session owns one authenticated MQTT connection and its telemetry stream.
@@ -54,8 +62,9 @@ type Session struct {
 }
 
 var (
-	_ connectorapi.Session    = (*Session)(nil)
-	_ connectorapi.CountsLink = (*Session)(nil)
+	_ connectorapi.Session      = (*Session)(nil)
+	_ connectorapi.CountsLink   = (*Session)(nil)
+	_ connectorapi.ReportsProbe = (*Session)(nil)
 )
 
 func newSession(timeout, stale time.Duration, serial string, caps connectorapi.Set, log *slog.Logger) *Session {
@@ -75,6 +84,10 @@ func (s *Session) Identity() connectorapi.Identity { return s.identity }
 
 // Capabilities returns a copy; this session has one immutable epoch.
 func (s *Session) Capabilities() (connectorapi.Set, uint64) { return s.caps.Clone(), 1 }
+
+// Probe tells the host what is actually available after resolving the printer's
+// identity and endpoint opt-ins. This narrows the host's API and UI descriptors.
+func (s *Session) Probe() connectorapi.Set { return s.caps.Clone() }
 
 // State returns normalized state patches. Only run sends and closes this channel.
 func (s *Session) State() <-chan connectorapi.StatePatch { return s.state }
@@ -165,7 +178,8 @@ func (s *Session) run() {
 	defer s.stop()
 	stale := time.NewTimer(s.staleAfter)
 	defer stale.Stop()
-	parser := telemetry{}
+	var parse func([]byte) ([]connectorapi.StatePatch, bool, bool, error)
+	var model modelProfile
 	identified, initial := false, false
 	// Each pending path has at most one value. A slow host never loses a field
 	// that the printer reports only once, and memory is bounded by the fixed parser.
@@ -193,19 +207,27 @@ func (s *Session) run() {
 				s.refused.Add(1)
 				return
 			}
-			s.controlReply(frame, received.at)
 			if !identified {
-				identity, found, err := decodeIdentity(frame, s.serial)
-				if err != nil {
-					s.identified <- identityAnswer{err: err}
+				answer, found := decodeIdentity(frame, s.serial)
+				if !found {
+					continue
+				}
+				s.identified <- answer
+				if answer.err != nil {
 					return
 				}
-				if found {
-					s.identified <- identityAnswer{identity: identity}
-					identified = true
+				model, identified = answer.model, true
+				if model.rackInventory {
+					parse = (&telemetry.H3C{}).Parse
+				} else {
+					parse = telemetry.NewStandard(model.monitor).Parse
 				}
+				continue
 			}
-			patches, full, status, err := parser.parse(frame)
+			if model.controls || model.dispatch {
+				s.controlReply(frame, received.at)
+			}
+			patches, full, status, err := parse(frame)
 			if err != nil {
 				s.refused.Add(1)
 				// A rejected delta may have been a safety-relevant change.
@@ -215,7 +237,12 @@ func (s *Session) run() {
 			if !status {
 				continue
 			}
-			s.observeControl(patches, received.at)
+			if !initial && !full {
+				continue
+			}
+			if model.controls || model.dispatch {
+				s.observeControl(patches, received.at)
+			}
 			stale.Reset(s.staleAfter)
 			if full {
 				s.reportMu.Lock()
@@ -257,5 +284,3 @@ func patchPriority(path string) int {
 		return 2
 	}
 }
-
-var errInvalidReport = errors.New("invalid printer status report")

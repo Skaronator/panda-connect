@@ -1,4 +1,4 @@
-package h3c
+package telemetry
 
 import (
 	"encoding/json"
@@ -12,6 +12,9 @@ import (
 
 // Home addresses are logical tool identities. The wire id changes when a
 // PrintTool moves from its rack to the one extruder; it is not a stable ID.
+// H3CMaxNozzleTemperature is the manufacturer's H3C nozzle limit in Celsius.
+const H3CMaxNozzleTemperature = 350
+
 type nozzleInfo struct {
 	ID       *int     `json:"id"`
 	Address  *int     `json:"addr_id"`
@@ -306,7 +309,7 @@ func (v *inventory) parse(frame []byte, full bool) ([]connectorapi.StatePatch, e
 				}
 			}
 		}
-		if n.Maximum != nil && *n.Maximum > 0 && *n.Maximum <= MaxNozzleTemperature {
+		if n.Maximum != nil && *n.Maximum > 0 && *n.Maximum <= H3CMaxNozzleTemperature {
 			put(base+"/max_temperature", n.Maximum)
 		}
 		if n.Temp != nil {

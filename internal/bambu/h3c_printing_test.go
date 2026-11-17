@@ -1,4 +1,4 @@
-package h3c
+package bambu
 
 import (
 	"crypto/sha256"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
+	"github.com/skaronator/pandalink/internal/telemetry"
 )
 
 func approveTestPrint(t *testing.T, p *fakePrinter, f *fakeFTPS) PrintApproval {
@@ -95,8 +96,8 @@ func TestPrintRefusesUnsafeOrAmbiguousCases(t *testing.T) {
 func TestExplicitMultiMaterialMapping(t *testing.T) {
 	p := startFake(t)
 	s := connectFake(t, p, time.Second)
-	var parser telemetry
-	patches, _, _, _ := parser.parse(fixture(t, "h3c-inventory.json"))
+	var parser telemetry.H3C
+	patches, _, _, _ := parser.Parse(fixture(t, "h3c-inventory.json"))
 	s.observeControl(patches, time.Now())
 	a := PrintApproval{Filaments: []PrintFilament{{Material: "PLA", Diameter: 0.4}, {Material: "PETG", Diameter: 0.4}}}
 	fields, err := s.printMapping(a, []string{"0.0", "8.0"})

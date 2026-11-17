@@ -1,7 +1,7 @@
-package h3c
-
-// Small, deliberately restricted implicit-FTPS client. No active FTP, arbitrary
+// Package ftps implements a restricted implicit-FTPS client. No active FTP, arbitrary
 // PASV hosts, cleartext data, URLs, or protocol debug logging are supported.
+package ftps
+
 import (
 	"bufio"
 	"context"
@@ -13,11 +13,14 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 var errFTP = errors.New("printer file protocol failed")
 
-type ftps struct {
+// Client is one authenticated FTPS control connection. Operations are serial.
+type Client struct {
 	conn   *tls.Conn
 	reader *bufio.Reader
 	cfg    *tls.Config
@@ -28,7 +31,8 @@ type ftps struct {
 	stop   func() bool
 }
 
-func dialFTPS(ctx context.Context, address, code string, cfg *tls.Config) (*ftps, error) {
+// Dial authenticates and requires TLS on the control and data connections.
+func Dial(ctx context.Context, address, code string, cfg *tls.Config) (*Client, error) {
 	cfg = cfg.Clone()
 	host, _, _ := net.SplitHostPort(address)
 	if cfg.ServerName == "" {
@@ -41,7 +45,7 @@ func dialFTPS(ctx context.Context, address, code string, cfg *tls.Config) (*ftps
 	if err != nil {
 		return nil, errFTP
 	}
-	f := &ftps{conn: c.(*tls.Conn), cfg: cfg, ctx: ctx}
+	f := &Client{conn: c.(*tls.Conn), cfg: cfg, ctx: ctx}
 	f.reader = bufio.NewReaderSize(c, 8192)
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = c.SetDeadline(deadline)
@@ -50,7 +54,7 @@ func dialFTPS(ctx context.Context, address, code string, cfg *tls.Config) (*ftps
 	ok := false
 	defer func() {
 		if !ok {
-			f.close()
+			f.Close()
 		}
 	}()
 	if _, err = f.response(220); err != nil {
@@ -71,7 +75,7 @@ func dialFTPS(ctx context.Context, address, code string, cfg *tls.Config) (*ftps
 	return f, nil
 }
 
-func (f *ftps) closeSockets() {
+func (f *Client) closeSockets() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.closed = true
@@ -80,14 +84,16 @@ func (f *ftps) closeSockets() {
 		_ = f.data.Close()
 	}
 }
-func (f *ftps) close() {
+
+// Close closes the control connection and any pending data connection.
+func (f *Client) Close() {
 	if f.stop != nil {
 		f.stop()
 	}
 	f.closeSockets()
 }
 
-func (f *ftps) response(want int) (string, error) {
+func (f *Client) response(want int) (string, error) {
 	var first string
 	for i := 0; i < 128; i++ {
 		line, err := f.reader.ReadSlice('\n')
@@ -112,7 +118,7 @@ func (f *ftps) response(want int) (string, error) {
 	}
 	return "", errFTP
 }
-func (f *ftps) command(want int, command string) (string, error) {
+func (f *Client) command(want int, command string) (string, error) {
 	if strings.ContainsAny(command, "\r\n\x00") {
 		return "", errFTP
 	}
@@ -125,7 +131,7 @@ func (f *ftps) command(want int, command string) (string, error) {
 	return f.response(want)
 }
 
-func (f *ftps) passive() (net.Conn, error) {
+func (f *Client) passive() (net.Conn, error) {
 	answer, err := f.command(229, "EPSV")
 	port := 0
 	if err == nil {
@@ -180,7 +186,7 @@ func (f *ftps) passive() (net.Conn, error) {
 	return c, nil
 }
 
-func (f *ftps) transfer(command string, copyData func(io.ReadWriter) error) error {
+func (f *Client) transfer(command string, copyData func(io.ReadWriter) error) error {
 	if strings.ContainsAny(command, "\r\n\x00") {
 		return errFTP
 	}
@@ -215,14 +221,27 @@ func (f *ftps) transfer(command string, copyData func(io.ReadWriter) error) erro
 	return err
 }
 
-type ftpEntry struct {
-	name          string
-	size          int64
-	folder, other bool
+// Store writes to a remote path. The caller must check for collisions first.
+func (f *Client) Store(path string, write func(io.Writer) error) error {
+	return f.transfer("STOR "+path, func(data io.ReadWriter) error { return write(data) })
 }
 
-func (f *ftps) list(path string) ([]ftpEntry, error) {
-	var entries []ftpEntry
+// Retrieve reads from a remote path until the callback returns.
+func (f *Client) Retrieve(path string, read func(io.Reader) error) error {
+	return f.transfer("RETR "+path, func(data io.ReadWriter) error { return read(data) })
+}
+
+// Entry describes a Unix LIST record. Other entries are kept only for
+// collision checks; they are not regular files or traversable directories.
+type Entry struct {
+	Name          string
+	Size          int64
+	Folder, Other bool
+}
+
+// List reads a bounded Unix directory listing from the printer.
+func (f *Client) List(path string) ([]Entry, error) {
+	var entries []Entry
 	err := f.transfer("LIST "+path, func(c io.ReadWriter) error {
 		limited := &io.LimitedReader{R: c, N: (4 << 20) + 1}
 		scanner := bufio.NewScanner(limited)
@@ -256,14 +275,14 @@ func (f *ftps) list(path string) ([]ftpEntry, error) {
 			if name == "." || name == ".." {
 				continue
 			}
-			if !validSegment(name) {
+			if !ValidSegment(name) {
 				return errFTP
 			}
 			size, err := strconv.ParseInt(parts[4], 10, 64)
 			if err != nil || size < 0 {
 				return errFTP
 			}
-			entries = append(entries, ftpEntry{name: name, size: size, folder: line[0] == 'd', other: line[0] != 'd' && line[0] != '-'})
+			entries = append(entries, Entry{Name: name, Size: size, Folder: line[0] == 'd', Other: line[0] != 'd' && line[0] != '-'})
 		}
 		if limited.N == 0 {
 			return errFTP
@@ -271,4 +290,10 @@ func (f *ftps) list(path string) ([]ftpEntry, error) {
 		return scanner.Err()
 	})
 	return entries, err
+}
+
+// ValidSegment checks a single remote filename or directory name.
+func ValidSegment(s string) bool {
+	return s != "" && s != "." && s != ".." && len(s) <= 255 && utf8.ValidString(s) &&
+		!strings.ContainsAny(s, "/\\%:;?*\"<>|") && !strings.ContainsFunc(s, unicode.IsControl) && strings.TrimSpace(s) == s
 }

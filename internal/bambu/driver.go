@@ -1,5 +1,5 @@
-// Package pandalink connects Bambu Lab H3C printers to Prusa Connect over local MQTT.
-package h3c
+// Package bambu connects supported Bambu Lab printers to Prusa Connect over local MQTT.
+package bambu
 
 import (
 	"context"
@@ -19,6 +19,7 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
 	"github.com/prusa3d/prusa-connect/sdk/extension"
+	"github.com/skaronator/pandalink/internal/mqttwire"
 	"github.com/skaronator/pandalink/internal/printertls"
 	"github.com/skaronator/pandalink/internal/secret"
 )
@@ -30,7 +31,6 @@ const (
 	VerbSendStateInfo connectorapi.Capability = "core.command.send_state_info"
 	// DefaultTimeout bounds the MQTT handshake and an explicit refresh.
 	DefaultTimeout = 15 * time.Second
-	maxFrameBytes  = 256 << 10
 )
 
 func init() { connectorapi.Register(Type, Doc(), New, dialect()) }
@@ -38,10 +38,10 @@ func init() { connectorapi.Register(Type, Doc(), New, dialect()) }
 // Doc describes the driver and its connector-wide settings.
 func Doc() extension.Doc {
 	return extension.Doc{
-		Summary: "Local H3C monitoring, confirmed controls, FTPS and approved single-plate printing.",
+		Summary: "Local Bambu Lab monitoring, controls and storage for supported models.",
 		Description: "Each endpoint supplies serial, access_code_file and tls_fingerprint (or ca_file). " +
-			"LAN-only and Developer Mode are required. Controls wait for printer confirmation. " +
-			"Print dispatch requires an explicit print_manifest_file. Rack/AMS inventory is read-only.",
+			"Enable LAN-only Mode; H3C controls also require Developer Mode and wait for printer confirmation. " +
+			"Other models have read-only monitoring profiles. Print dispatch requires an explicit print_manifest_file.",
 		Version: "0.2.0", Contract: connectorapi.Contract, Stability: extension.StabilityExperimental,
 		Options: []extension.Option{
 			{Key: "timeout", Type: extension.OptionDuration, Default: DefaultTimeout.String(), Summary: "Maximum time for a connection, command, listing or print preflight; uploads have a 10-minute ceiling."},
@@ -84,7 +84,7 @@ func dialect() connectorapi.Dialect {
 	}
 	return connectorapi.Dialect{
 		Brands: []string{"Bambu Lab"}, Needs: connectorapi.NeedsAddress,
-		Models: []connectorapi.DeviceModel{{Model: "H3C", DisplayName: "Bambu Lab H3C", Vendor: "Bambu Lab"}}, States: set,
+		Models: supportedDeviceModels(), States: set,
 	}
 }
 
@@ -133,10 +133,12 @@ func NewDriver(timeout time.Duration) *Driver {
 	return &Driver{timeout: timeout, staleAfter: 2 * time.Minute, log: slog.New(slog.DiscardHandler)}
 }
 
-// Baseline describes all implemented controls. A session without an operator
-// print manifest removes start_print and its arguments.
+// Baseline is the connector-wide ceiling. ReportsProbe gives the host the
+// per-printer subset once the printer's reported identity has been resolved.
 func (d *Driver) Baseline() connectorapi.Set {
-	return controlCapabilities()
+	// H3C is the only profile with commands beyond a status refresh today.
+	m, _ := modelForProduct("Bambu Lab H3C")
+	return m.capabilities()
 }
 
 // Connect authenticates, checks the reported identity and waits for initial telemetry.
@@ -165,29 +167,12 @@ func (d *Driver) Connect(ctx context.Context, endpoint connectorapi.Endpoint, pr
 	if err != nil {
 		return nil, InvalidConfig.New(err.Error())
 	}
-	storage, err := storageEndpoint(address, endpoint.Options, tlsConfig)
-	if err != nil {
-		return nil, err
-	}
-	approvals, err := loadApprovals(endpoint.Options["print_manifest_file"])
-	if err != nil {
-		return nil, err
-	}
-	s := newSession(d.timeout, d.staleAfter, serial, d.Baseline().Intersect(profile), d.log)
+	s := newSession(d.timeout, d.staleAfter, serial, nil, d.log)
 	// Stay within signed 32-bit firmware parsers while avoiding predictable
 	// sequence reuse on reconnect (including from late command replies).
 	var seed [4]byte
 	_, _ = rand.Read(seed[:])
 	s.sequence.Store(uint64(binary.BigEndian.Uint32(seed[:]) & 0x3fffffff))
-	s.storage, s.approvals = storage, approvals
-	if !storage.uploads {
-		delete(s.caps, connectorapi.VerbFileUpload)
-	}
-	if len(s.approvals) == 0 {
-		delete(s.caps, VerbStartPrint)
-		delete(s.caps, connectorapi.ArgumentKey(VerbStartPrint, "path"))
-		delete(s.caps, connectorapi.ArgumentKey(VerbStartPrint, "tool_mapping"))
-	}
 	opts := mqtt.NewClientOptions().AddBroker("ssl://" + address).
 		SetClientID("pandalink-" + rand.Text()[:16]).SetUsername("bblp").SetPassword(secret).
 		SetTLSConfig(tlsConfig).SetProtocolVersion(4).SetCleanSession(true).
@@ -200,11 +185,14 @@ func (d *Driver) Connect(ctx context.Context, endpoint connectorapi.Endpoint, pr
 		if err != nil {
 			return nil, err
 		}
-		return &boundedMQTTConn{Conn: conn}, nil
+		return &mqttwire.Conn{Conn: conn}, nil
 	})
 	opts.SetConnectionLostHandler(func(_ mqtt.Client, _ error) { s.stop() })
 	opts.SetDefaultPublishHandler(func(_ mqtt.Client, msg mqtt.Message) {
-		if len(msg.Payload()) > maxFrameBytes {
+		if msg.Topic() != "device/"+serial+"/report" || msg.Retained() {
+			return
+		}
+		if len(msg.Payload()) > mqttwire.MaxPayloadBytes {
 			s.refused.Add(1)
 			s.stop()
 			return
@@ -233,21 +221,45 @@ func (d *Driver) Connect(ctx context.Context, endpoint connectorapi.Endpoint, pr
 	if err = awaitToken(ctx, s.client.Subscribe("device/"+serial+"/report", 0, nil)); err != nil {
 		return nil, DeviceUnreachable.New("cannot subscribe to printer telemetry").Wrap(err)
 	}
-	for _, command := range []struct{ section, name string }{{"info", "get_version"}, {"pushing", "pushall"}} {
-		if err = s.publish(ctx, command.section, command.name); err != nil {
-			return nil, DeviceUnreachable.New("cannot request initial printer reports").Wrap(err)
-		}
+	if err = s.publish(ctx, "info", "get_version"); err != nil {
+		return nil, DeviceUnreachable.New("cannot request printer identity").Wrap(err)
 	}
+	var model modelProfile
 	select {
 	case answer := <-s.identified:
 		if answer.err != nil {
 			return nil, answer.err
 		}
 		s.identity = answer.identity
+		model = answer.model
 	case <-ctx.Done():
 		return nil, DeviceUnreachable.New("printer identity timed out").Wrap(ctx.Err())
 	case <-s.done:
 		return nil, DeviceUnreachable.New("printer disconnected during identification")
+	}
+	s.caps = model.capabilities().Intersect(d.Baseline()).Intersect(profile)
+	if model.storage {
+		s.storage, err = storageEndpoint(address, endpoint.Options, tlsConfig)
+		if err != nil {
+			return nil, err
+		}
+		if !s.storage.uploads {
+			delete(s.caps, connectorapi.VerbFileUpload)
+		}
+	}
+	if model.dispatch {
+		s.approvals, err = loadApprovals(endpoint.Options["print_manifest_file"])
+		if err != nil {
+			return nil, err
+		}
+		if len(s.approvals) == 0 {
+			delete(s.caps, VerbStartPrint)
+			delete(s.caps, connectorapi.ArgumentKey(VerbStartPrint, "path"))
+			delete(s.caps, connectorapi.ArgumentKey(VerbStartPrint, "tool_mapping"))
+		}
+	}
+	if err = s.publish(ctx, "pushing", "pushall"); err != nil {
+		return nil, DeviceUnreachable.New("cannot request initial printer state").Wrap(err)
 	}
 	select {
 	case <-s.initialState:
@@ -257,6 +269,9 @@ func (d *Driver) Connect(ctx context.Context, endpoint connectorapi.Endpoint, pr
 		return nil, DeviceUnreachable.New("printer disconnected before initial telemetry")
 	}
 	success = true
+	if model.monitorOnly() {
+		return monitorSession{Session: s, CountsLink: s, ReportsProbe: s}, nil
+	}
 	return s, nil
 }
 
@@ -295,7 +310,7 @@ func awaitToken(ctx context.Context, token mqtt.Token) error {
 	}
 }
 
-func decodeIdentity(frame []byte, serial string) (connectorapi.Identity, bool, error) {
+func decodeIdentity(frame []byte, serial string) (identityAnswer, bool) {
 	var report struct {
 		Info struct {
 			Command string `json:"command"`
@@ -308,24 +323,31 @@ func decodeIdentity(frame []byte, serial string) (connectorapi.Identity, bool, e
 		} `json:"info"`
 	}
 	if err := json.Unmarshal(frame, &report); err != nil {
-		return connectorapi.Identity{}, false, err
+		return identityAnswer{err: err}, true
 	}
 	if report.Info.Command != "get_version" {
-		return connectorapi.Identity{}, false, nil
+		return identityAnswer{}, false
 	}
+	var answer identityAnswer
+	found := false
 	for _, module := range report.Info.Modules {
 		if module.Name != "ota" {
 			continue
 		}
+		if found {
+			return identityAnswer{err: DeviceUnreachable.New("printer reported multiple OTA identities")}, true
+		}
+		found = true
 		if module.Serial != serial {
-			return connectorapi.Identity{}, true, DeviceUnreachable.New("reported printer serial does not match the endpoint")
+			return identityAnswer{err: DeviceUnreachable.New("reported printer serial does not match the endpoint")}, true
 		}
-		if module.Product != "Bambu Lab H3C" {
-			return connectorapi.Identity{}, true, DeviceUnreachable.New("this release supports the H3C only")
+		model, ok := modelForProduct(module.Product)
+		if !ok {
+			return identityAnswer{err: DeviceUnreachable.New("the reported printer model has no enabled PandaLink profile")}, true
 		}
-		return connectorapi.Identity{Vendor: "Bambu Lab", Model: "H3C", Serial: serial, UnitUID: "bambu:" + serial, Firmware: connectorapi.NewFirmwareLabel(module.Firmware)}, true, nil
+		answer = identityAnswer{model: model, identity: connectorapi.Identity{Vendor: model.device.Vendor, Model: model.device.Model, Serial: serial, UnitUID: "bambu:" + serial, Firmware: connectorapi.NewFirmwareLabel(module.Firmware)}}
 	}
-	return connectorapi.Identity{}, false, nil
+	return answer, found
 }
 
 func (s *Session) publish(ctx context.Context, section, command string) error {

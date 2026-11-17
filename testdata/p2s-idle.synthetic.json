@@ -1,0 +1,1 @@
+{"print":{"command":"push_status","sequence_id":"2021","gcode_state":"IDLE","device":{"bed":{"info":{"temp":24}},"extruder":{"info":[{"id":0,"temp":25}]}},"print_error":0,"hms":[]}}

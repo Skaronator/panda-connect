@@ -1,13 +1,17 @@
-package h3c
+// Package telemetry translates Bambu status reports into SDK state patches.
+package telemetry
 
 import (
 	"encoding/json"
+	"errors"
 	"math"
 	"strconv"
 	"strings"
 
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
 )
+
+var errInvalidReport = errors.New("invalid printer status report")
 
 // numeric accepts both JSON numbers and the numeric strings Bambu sends.
 type numeric float64
@@ -46,7 +50,11 @@ type printReport struct {
 	Chamber        *numeric        `json:"chamber_temper"`
 	PrintError     *numeric        `json:"print_error"`
 	HMS            json.RawMessage `json:"hms"`
-	Device         struct {
+}
+
+type rackPrintReport struct {
+	printReport
+	Device struct {
 		Chamber struct {
 			Info struct {
 				Temp *numeric `json:"temp"`
@@ -66,7 +74,8 @@ type printReport struct {
 	} `json:"device"`
 }
 
-type telemetry struct {
+// H3C parses status and rack inventory for one H3C connection.
+type H3C struct {
 	task, subtask, start, name, file, state string
 	jobID                                   string
 	initialized                             bool
@@ -74,9 +83,10 @@ type telemetry struct {
 	packedNozzle                            bool
 }
 
-func (t *telemetry) parse(frame []byte) (patches []connectorapi.StatePatch, full, status bool, err error) {
+// Parse applies a report and returns patches and its full/status flags.
+func (t *H3C) Parse(frame []byte) (patches []connectorapi.StatePatch, full, status bool, err error) {
 	var envelope struct {
-		Print *printReport `json:"print"`
+		Print *rackPrintReport `json:"print"`
 	}
 	if err = json.Unmarshal(frame, &envelope); err != nil {
 		return nil, false, false, err

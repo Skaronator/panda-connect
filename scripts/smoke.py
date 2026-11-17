@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check the local deployment. Only a read-only status request is sent."""
 
+import argparse
 import json
 import os
 import re
@@ -19,7 +20,7 @@ def request(path, body=None):
         return response.read()
 
 
-def check():
+def check(args):
     html = request("/").decode()
     assets = re.findall(r'(?:src|href)="(/assets/[^\"]+)"', html)
     if not assets:
@@ -31,24 +32,34 @@ def check():
     printers = [d for d in devices if d["driver"] == "pandalink" and d["connected"]]
     if not printers:
         raise RuntimeError("No connected PandaLink printer; check docker compose logs")
+    required = "A1 mini" if args.require_a1_mini else args.require_model
+    if required and not any(d["model"] == required for d in printers):
+        raise RuntimeError(f"No connected {required} on pandalink")
+    if args.acceptance and not any(d["model"] == "H3C" for d in printers):
+        raise RuntimeError("H3C acceptance requires a connected H3C")
     for printer in printers:
-        if printer["model"] != "H3C":
-            raise RuntimeError("Unexpected printer model")
-        if "core.command.send_state_info" not in printer["capabilities"]:
+        monitor = printer["model"] != "H3C"
+        refresh = "core.command.send_state_info"
+        if refresh not in printer["capabilities"]:
             raise RuntimeError("The read-only status capability is missing")
+        if monitor:
+            prefix = f'/api/v1/devices/{printer["id"]}'
+            descriptors = json.loads(request(prefix + "/capabilities"))["capabilities"]
+            if set(printer["capabilities"]) != {refresh} or {item["key"] for item in descriptors} != {refresh}:
+                raise RuntimeError("The read-only profile advertises more than a status refresh")
         state = printer["state"]
         nozzle = "/bambu/active_nozzle_temp"
         if nozzle not in state and not state.get("/bambu/inventory_known"):
             nozzle = "/tools/0/nozzle_temp"
         for path in ["/state", nozzle, "/temperature/bed"]:
-            if path not in state:
+            if state.get(path) is None:
                 raise RuntimeError(f"Missing live telemetry: {path}")
         if state["/state"] in ("PRINTING", "PAUSED") and state.get("/job/id"):
             if not printer.get("job", {}).get("running"):
                 raise RuntimeError("The host closed a job that is still printing or paused")
         reply = json.loads(request(
             f'/api/v1/devices/{printer["id"]}/commands',
-            {"verb": "core.command.send_state_info"},
+            {"verb": refresh},
         ))
         if not reply.get("ok"):
             raise RuntimeError(f"Status refresh failed: {reply}")
@@ -61,7 +72,7 @@ def check():
             "progress": state.get("/job/progress"),
             "refresh": "ok",
         }, indent=2))
-        if sys.argv[1:] == ["--acceptance"]:
+        if args.acceptance and not monitor:
             acceptance(printer)
     print(f"PASS: {len(assets)} frontend assets and {len(printers)} live printer(s)")
 
@@ -122,9 +133,14 @@ def acceptance(printer):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--acceptance", action="store_true", help="also run H3C-only acceptance checks")
+    model = parser.add_mutually_exclusive_group()
+    model.add_argument("--require-model", help="fail unless this model is connected")
+    model.add_argument("--require-a1-mini", action="store_true", help="alias for --require-model 'A1 mini'")
     base = os.environ.get("PANDALINK_URL", "http://127.0.0.1:8081").rstrip("/")
     try:
-        check()
+        check(parser.parse_args())
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         sys.exit(1)

@@ -1,23 +1,21 @@
-package h3c
+package telemetry
 
 import (
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
-	"testing/synctest"
-	"time"
 
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
 )
 
-func writeTestFile(t *testing.T, data string) string {
+func fixture(t *testing.T, name string) []byte {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "secret")
-	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", name))
+	if err != nil {
 		t.Fatal(err)
 	}
-	return path
+	return data
 }
 
 func patchValues(patches []connectorapi.StatePatch) map[string]string {
@@ -29,8 +27,8 @@ func patchValues(patches []connectorapi.StatePatch) map[string]string {
 }
 
 func TestH3CFixture(t *testing.T) {
-	var parser telemetry
-	patches, full, status, err := parser.parse(fixture(t, "h3c-running.json"))
+	var parser H3C
+	patches, full, status, err := parser.Parse(fixture(t, "h3c-running.json"))
 	if err != nil || !full || !status {
 		t.Fatalf("parse: %v full=%v status=%v", err, full, status)
 	}
@@ -47,9 +45,9 @@ func TestH3CFixture(t *testing.T) {
 }
 
 func TestDeltaKeepsUnchangedValues(t *testing.T) {
-	var parser telemetry
-	_, _, _, _ = parser.parse(fixture(t, "h3c-running.json"))
-	patches, full, _, err := parser.parse([]byte(`{"print":{"command":"push_status","msg":1,"mc_percent":21}}`))
+	var parser H3C
+	_, _, _, _ = parser.Parse(fixture(t, "h3c-running.json"))
+	patches, full, _, err := parser.Parse([]byte(`{"print":{"command":"push_status","msg":1,"mc_percent":21}}`))
 	if err != nil || full {
 		t.Fatal("invalid delta handling", err)
 	}
@@ -66,8 +64,8 @@ func TestDeltaKeepsUnchangedValues(t *testing.T) {
 }
 
 func TestPackedTemperatures(t *testing.T) {
-	var parser telemetry
-	patches, _, _, err := parser.parse([]byte(`{"print":{"command":"push_status","device":{"bed":{"info":{"temp":4587590}},"extruder":{"info":[{"id":0,"temp":16711935}]}}}}`))
+	var parser H3C
+	patches, _, _, err := parser.Parse([]byte(`{"print":{"command":"push_status","device":{"bed":{"info":{"temp":4587590}},"extruder":{"info":[{"id":0,"temp":16711935}]}}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,16 +76,16 @@ func TestPackedTemperatures(t *testing.T) {
 }
 
 func TestJobLifecycle(t *testing.T) {
-	var parser telemetry
-	_, _, _, _ = parser.parse(fixture(t, "h3c-running.json"))
-	patches, _, _, err := parser.parse([]byte(`{"print":{"command":"push_status","gcode_state":"FINISH","mc_percent":100}}`))
+	var parser H3C
+	_, _, _, _ = parser.Parse(fixture(t, "h3c-running.json"))
+	patches, _, _, err := parser.Parse([]byte(`{"print":{"command":"push_status","gcode_state":"FINISH","mc_percent":100}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if patchValues(patches)["/job/outcome"] != `"finished"` {
 		t.Fatalf("outcome: %v", patchValues(patches))
 	}
-	patches, _, _, err = parser.parse([]byte(`{"print":{"command":"push_status","gcode_state":"RUNNING","task_id":"2286","mc_percent":0}}`))
+	patches, _, _, err = parser.Parse([]byte(`{"print":{"command":"push_status","gcode_state":"RUNNING","task_id":"2286","mc_percent":0}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,9 +100,9 @@ func TestHostStateVocabulary(t *testing.T) {
 		"IDLE": "IDLE", "PREPARE": "BUSY", "RUNNING": "PRINTING", "PAUSE": "PAUSED", "FINISH": "FINISHED", "FAILED": "ERROR", "FUTURE": "UNKNOWN",
 	} {
 		t.Run(vendor, func(t *testing.T) {
-			var parser telemetry
+			var parser H3C
 			raw, _ := json.Marshal(map[string]any{"print": map[string]any{"command": "push_status", "task_id": "42", "gcode_state": vendor}})
-			patches, _, _, err := parser.parse(raw)
+			patches, _, _, err := parser.Parse(raw)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -121,8 +119,8 @@ func TestHostStateVocabulary(t *testing.T) {
 }
 
 func TestJobWithoutStableIDIsNotInvented(t *testing.T) {
-	var parser telemetry
-	patches, _, _, err := parser.parse([]byte(`{"print":{"command":"push_status","gcode_state":"RUNNING","task_id":"0","mc_percent":10}}`))
+	var parser H3C
+	patches, _, _, err := parser.Parse([]byte(`{"print":{"command":"push_status","gcode_state":"RUNNING","task_id":"0","mc_percent":10}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,8 +132,8 @@ func TestJobWithoutStableIDIsNotInvented(t *testing.T) {
 }
 
 func TestUnrecognizedStateIsPreservedAsUnknown(t *testing.T) {
-	var parser telemetry
-	patches, _, _, err := parser.parse([]byte(`{"print":{"command":"push_status","gcode_state":"FUTURE_STATE"}}`))
+	var parser H3C
+	patches, _, _, err := parser.Parse([]byte(`{"print":{"command":"push_status","gcode_state":"FUTURE_STATE"}}`))
 	if err != nil || patchValues(patches)["/state"] != `"UNKNOWN"` {
 		t.Fatal("unknown state handling", err)
 	}
@@ -143,45 +141,9 @@ func TestUnrecognizedStateIsPreservedAsUnknown(t *testing.T) {
 
 func TestMalformedReports(t *testing.T) {
 	for _, frame := range []string{`{`, `{"print":{"command":"push_status","nozzle_temper":{}}}`, `{"print":{"command":"push_status","hms":{}}}`, `{"print":{"command":"push_status","mc_percent":"NaN"}}`} {
-		var parser telemetry
-		if _, _, _, err := parser.parse([]byte(frame)); err == nil {
+		var parser H3C
+		if _, _, _, err := parser.Parse([]byte(frame)); err == nil {
 			t.Fatalf("accepted %s", frame)
 		}
 	}
-}
-
-func TestBackpressureRetainsOneTimeValues(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		s := newSession(time.Second, time.Minute, "H3C-TEST-001", nil, NewDriver(0).log)
-		go s.run()
-		defer func() { s.stop(); <-s.exited }()
-		s.incoming <- receivedFrame{data: fixture(t, "h3c-running.json"), at: time.Now()}
-		synctest.Wait()
-		for i := 21; i <= 50; i++ {
-			raw, _ := json.Marshal(map[string]any{"print": map[string]any{"command": "push_status", "mc_percent": i}})
-			s.incoming <- receivedFrame{data: raw, at: time.Now()}
-			synctest.Wait()
-		}
-		if s.Dropped() == 0 {
-			t.Fatal("replaced patches were not counted")
-		}
-		seen := make(map[string]string)
-		for {
-			select {
-			case patch := <-s.State():
-				seen[patch.Path] = string(patch.Value)
-			default:
-				synctest.Wait()
-				select {
-				case patch := <-s.State():
-					seen[patch.Path] = string(patch.Value)
-				default:
-					if seen["/job/display"] != `"Test part"` || seen["/job/progress"] != "50" || seen["/tools/0/nozzle_temp"] != "255" {
-						t.Fatalf("lost pending state: %v", seen)
-					}
-					return
-				}
-			}
-		}
-	})
 }

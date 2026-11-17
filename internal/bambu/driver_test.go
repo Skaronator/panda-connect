@@ -1,4 +1,4 @@
-package h3c
+package bambu
 
 import (
 	"context"
@@ -67,9 +67,20 @@ func TestConnectionSecurity(t *testing.T) {
 		}
 	})
 	t.Run("serial mismatch", func(t *testing.T) {
-		_, found, err := decodeIdentity(fixture(t, "h3c-version.json"), "WRONG")
-		if !found || err == nil {
+		answer, found := decodeIdentity(fixture(t, "h3c-version.json"), "WRONG")
+		if !found || answer.err == nil {
 			t.Fatal("accepted the wrong serial")
+		}
+	})
+	t.Run("unprofiled model", func(t *testing.T) {
+		p := startFake(t)
+		p.version = []byte(strings.ReplaceAll(string(p.version), "Bambu Lab H3C", "Unknown Test Model"))
+		d := NewDriver(time.Second)
+		if session, err := d.Connect(t.Context(), p.endpoint, d.Baseline()); session != nil || !fault.HasCode(err, DeviceUnreachable.Code()) {
+			if session != nil {
+				_ = session.Close()
+			}
+			t.Fatalf("unprofiled model was not refused: %v", err)
 		}
 	})
 	t.Run("missing pin", func(t *testing.T) {

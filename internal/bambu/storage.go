@@ -1,4 +1,4 @@
-package h3c
+package bambu
 
 import (
 	"context"
@@ -10,10 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
+	"github.com/skaronator/pandalink/internal/ftps"
 )
 
 const storageName = "sdcard"
@@ -30,11 +29,6 @@ var (
 	_ connectorapi.Transfers  = (*Session)(nil)
 )
 
-func validSegment(s string) bool {
-	return s != "" && s != "." && s != ".." && len(s) <= 255 && utf8.ValidString(s) &&
-		!strings.ContainsAny(s, "/\\%:;?*\"<>|") && !strings.ContainsFunc(s, unicode.IsControl) && strings.TrimSpace(s) == s
-}
-
 func storagePath(p string, root bool) (string, error) {
 	if err := connectorapi.RefusePathEscape(p); err != nil {
 		return "", err
@@ -44,7 +38,7 @@ func storagePath(p string, root bool) (string, error) {
 		return "", connectorapi.PathNotAllowed.New("use a storage-relative sdcard path")
 	}
 	for _, s := range parts {
-		if !validSegment(s) {
+		if !ftps.ValidSegment(s) {
 			return "", connectorapi.PathNotAllowed.New("path contains an unsafe segment")
 		}
 	}
@@ -56,7 +50,7 @@ func (s *Session) storageContext(ctx context.Context, duration time.Duration) (c
 	stop := context.AfterFunc(s.life, cancel)
 	return ctx, func() { stop(); cancel() }
 }
-func (s *Session) openStorage(ctx context.Context) (*ftps, error) {
+func (s *Session) openStorage(ctx context.Context) (*ftps.Client, error) {
 	if s.storage == nil {
 		return nil, connectorapi.ErrNoFilesystem
 	}
@@ -64,7 +58,7 @@ func (s *Session) openStorage(ctx context.Context) (*ftps, error) {
 	if err != nil {
 		return nil, StorageFailed.New("cannot read printer access-code file")
 	}
-	f, err := dialFTPS(ctx, s.storage.address, code, s.storage.tls)
+	f, err := ftps.Dial(ctx, s.storage.address, code, s.storage.tls)
 	if err != nil {
 		return nil, StorageFailed.New("cannot authenticate a verified FTPS connection")
 	}
@@ -118,7 +112,7 @@ func (s *Session) List(ctx context.Context, p string) (connectorapi.Listing, err
 	if err != nil {
 		return connectorapi.Listing{}, err
 	}
-	defer f.close()
+	defer f.Close()
 	l, err := listStorage(f, p, remote)
 	if err == nil && p == storageName && !s.storageSeen.Swap(true) {
 		select {
@@ -131,31 +125,31 @@ func (s *Session) List(ctx context.Context, p string) (connectorapi.Listing, err
 
 // Validate each ancestor as a listed directory. LIST does not expose links as
 // directories. No client-side check can protect against concurrent renames.
-func listVerifiedDir(f *ftps, remote string) ([]ftpEntry, error) {
+func listVerifiedDir(f *ftps.Client, remote string) ([]ftps.Entry, error) {
 	dir := "/"
 	if remote != "/" {
 		for _, segment := range strings.Split(strings.TrimPrefix(remote, "/"), "/") {
-			entries, err := f.list(dir)
+			entries, err := f.List(dir)
 			if err != nil {
 				return nil, err
 			}
 			found := false
 			for _, e := range entries {
-				if e.name == segment && e.folder {
+				if e.Name == segment && e.Folder {
 					found = true
 					break
 				}
 			}
 			if !found {
-				return nil, errFTP
+				return nil, errors.New("printer directory was not listed")
 			}
 			dir = path.Join(dir, segment)
 		}
 	}
-	return f.list(dir)
+	return f.List(dir)
 }
 
-func listStorage(f *ftps, p, remote string) (connectorapi.Listing, error) {
+func listStorage(f *ftps.Client, p, remote string) (connectorapi.Listing, error) {
 	if p != storageName {
 		entries, err := listVerifiedDir(f, path.Dir(remote))
 		if err != nil {
@@ -163,10 +157,10 @@ func listStorage(f *ftps, p, remote string) (connectorapi.Listing, error) {
 		}
 		found := false
 		for _, e := range entries {
-			if e.name == path.Base(remote) && !e.other {
+			if e.Name == path.Base(remote) && !e.Other {
 				found = true
-				if !e.folder {
-					return connectorapi.Listing{Directory: connectorapi.File{Path: p, Name: e.name, Size: e.size}}, nil
+				if !e.Folder {
+					return connectorapi.Listing{Directory: connectorapi.File{Path: p, Name: e.Name, Size: e.Size}}, nil
 				}
 				break
 			}
@@ -175,16 +169,16 @@ func listStorage(f *ftps, p, remote string) (connectorapi.Listing, error) {
 			return connectorapi.Listing{}, StorageFailed.New("path not found on printer")
 		}
 	}
-	entries, err := f.list(remote)
+	entries, err := f.List(remote)
 	if err != nil {
 		return connectorapi.Listing{}, StorageFailed.New("cannot list printer directory")
 	}
 	l := connectorapi.Listing{Directory: connectorapi.File{Path: p, Name: path.Base(p), Folder: true}}
 	for _, e := range entries {
-		if e.other {
+		if e.Other {
 			continue
 		}
-		l.Entries = append(l.Entries, connectorapi.File{Path: p + "/" + e.name, Name: e.name, Folder: e.folder, Size: e.size})
+		l.Entries = append(l.Entries, connectorapi.File{Path: p + "/" + e.Name, Name: e.Name, Folder: e.Folder, Size: e.Size})
 	}
 	return l, nil
 }
@@ -219,13 +213,13 @@ func (s *Session) Send(ctx context.Context, up connectorapi.Upload) error {
 	if err != nil {
 		return err
 	}
-	defer f.close()
+	defer f.Close()
 	entries, err := listVerifiedDir(f, path.Dir(remote))
 	if err != nil {
 		return StorageFailed.New("cannot inspect upload destination")
 	}
 	for _, e := range entries {
-		if strings.EqualFold(e.name, path.Base(remote)) {
+		if strings.EqualFold(e.Name, path.Base(remote)) {
 			return connectorapi.ErrTransferRefused
 		}
 	}
@@ -243,7 +237,7 @@ func (s *Session) Send(ctx context.Context, up connectorapi.Upload) error {
 			up.Progress(progress)
 		}
 	}
-	err = f.transfer("STOR "+remote, func(data io.ReadWriter) error {
+	err = f.Store(remote, func(data io.Writer) error {
 		emit()
 		buf := make([]byte, 64<<10)
 		for progress.Sent < total {
@@ -280,12 +274,12 @@ func (s *Session) Send(ctx context.Context, up connectorapi.Upload) error {
 		}
 		return errors.Join(connectorapi.ErrTransferFailed, StorageFailed.New("upload did not finish; a partial file may remain"))
 	}
-	entries, err = f.list(path.Dir(remote))
+	entries, err = f.List(path.Dir(remote))
 	if err != nil {
 		return connectorapi.TransferNotOnStorage.New("cannot verify uploaded file")
 	}
 	for _, e := range entries {
-		if e.name == path.Base(remote) && !e.folder && !e.other && e.size == total {
+		if e.Name == path.Base(remote) && !e.Folder && !e.Other && e.Size == total {
 			progress.Known = true
 			progress.Received = total
 			emit()

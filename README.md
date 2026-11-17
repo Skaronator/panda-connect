@@ -1,13 +1,17 @@
 # PandaLink
 
-PandaLink is a local Bambu Lab H3C driver for the self-hosted
+PandaLink is a local Bambu Lab printer driver for the self-hosted
 [Prusa Connect](https://github.com/prusa3d/prusa-connect) server.
+The `pandalink` connector selects a profile from the printer's reported identity.
+H3C is hardware-verified; the other [listed models](docs/compatibility.md) are
+enabled for read-only monitoring and still need hardware verification.
 
 It connects directly to the printer over MQTT with TLS. No Bambu account,
 cloud connection, Bambu Connect application or local Prusa Connect checkout is
-needed. Enable **LAN-only Mode and Developer Mode** on the printer first.
+needed. Enable **LAN-only Mode**. Enable **Developer Mode** for H3C controls;
+for other models, start with the [read-only setup](docs/compatibility.md#test-a-printer).
 
-## Features and verification
+## H3C features and verification
 
 - H3C identification, including firmware and a stable serial-based identity.
 - Live printer state, nozzle/bed/chamber temperatures, and nozzle diameter.
@@ -31,8 +35,10 @@ needed. Enable **LAN-only Mode and Developer Mode** on the printer first.
 See [controls, storage and print workflow](docs/protocol.md) and
 [camera setup](docs/camera.md) for API details and limitations. PandaLink does
 not move axes, manage filament or drying, or create/delete printer files or
-directories. Only H3C is supported. See the [acceptance record](docs/acceptance.md)
-for the distinction between live hardware and fake-only checks.
+directories. See the [acceptance record](docs/acceptance.md)
+for the distinction between live hardware and fake-only checks, and the
+[Bambu Studio source audit](docs/bambu-studio.md) for cross-model gaps. See the
+[compatibility matrix](docs/compatibility.md) for model status and test instructions.
 
 The protocol has been checked against H3C firmware **01.01.03.00**. Other
 firmware versions need testing. Bambu's local protocol is not a stable,
@@ -146,11 +152,9 @@ descriptors, invalid inputs that cannot publish printer controls, and FTPS
 storage browsing.
 
 An informational `no_capability_profile` issue is expected: PandaLink ships no
-firmware matrix. The host exposes the connector baseline at
-`/api/v1/devices/{id}/capabilities`, including argument descriptors. In this
-host release, the baseline can still list upload and print-start when the
-endpoint has not opted in; the driver refuses those operations. The broader
-authorization verb list is not the capability list.
+host firmware matrix. `/api/v1/devices/{id}/capabilities` shows the commands and
+argument descriptors narrowed by the reported printer identity and endpoint
+settings. The broader authorization verb list is not the capability list.
 
 ## Development
 
@@ -159,13 +163,13 @@ Run `task` to list the available tasks.
 
 ```sh
 task check
-go test -v -run TestContract .
+go test -v -run 'Test(Contract|MonitorContract)' ./internal/bambu
 task up
 ```
 
 Normal Go tests never contact a printer. They run SDK conformance and protocol
-tests against TLS MQTT, FTPS and RTSP fakes. Fixtures in `testdata/` are reduced,
-sanitized H3C reports. `scripts/smoke.py` checks the live host without sending
+tests against TLS MQTT, FTPS and RTSP fakes. `testdata/` contains reduced,
+sanitized captures and labeled synthetic reports. `scripts/smoke.py` checks the live host without sending
 physical controls.
 
 ### Pinned dependencies
@@ -179,6 +183,10 @@ physical controls.
 `server/` is a separate Go module that imports the released server and this
 repository's driver. Its only local replacement is PandaLink itself. Neither
 the upstream server nor SDK is replaced with a local directory.
+
+`internal/bambu/` owns the driver, sessions, and model capabilities.
+`internal/telemetry/` parses reports, `internal/ftps/` handles file transport,
+and `internal/mqttwire/` enforces MQTT frame limits.
 
 The Dockerfile builds the upstream frontend from a checksum-pinned archive at
 that same commit. It embeds the generated assets into the image's private Go

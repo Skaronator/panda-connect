@@ -1,10 +1,11 @@
-package h3c
+package bambu
 
 import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path"
@@ -55,7 +56,7 @@ func loadApprovals(file string) (map[string]PrintApproval, error) {
 	for _, p := range data.Prints {
 		_, err := storagePath(p.Path, false)
 		digest, e := hex.DecodeString(p.SHA256)
-		if err != nil || strings.Count(p.Path, "/") != 1 || e != nil || len(digest) != 32 || p.Size <= 0 || p.Size > maxUploadBytes || p.Model != "H3C" || p.Plate != 1 || !p.SinglePlate || !safeProjectName(path.Base(p.Path)) || len(p.Filaments) < 1 || len(p.Filaments) > 9 {
+		if err != nil || strings.Count(p.Path, "/") != 1 || e != nil || len(digest) != 32 || p.Size <= 0 || p.Size > maxUploadBytes || p.Model != modelH3C || p.Plate != 1 || !p.SinglePlate || !safeProjectName(path.Base(p.Path)) || len(p.Filaments) < 1 || len(p.Filaments) > 9 {
 			return nil, InvalidConfig.New("manifest requires an exact single-plate H3C .gcode.3mf file")
 		}
 		for _, f := range p.Filaments {
@@ -80,6 +81,9 @@ func safeProjectName(name string) bool {
 }
 
 func (s *Session) preparePrint(ctx context.Context, cmd connectorapi.Command) (map[string]any, error) {
+	if s.identity.Model != modelH3C {
+		return nil, PrintUnsupported.New("this print workflow requires the H3C profile")
+	}
 	remote, err := storagePath(cmd.Args["path"], false)
 	if err != nil {
 		return nil, err
@@ -105,19 +109,19 @@ func (s *Session) preparePrint(ctx context.Context, cmd connectorapi.Command) (m
 	if err != nil {
 		return nil, err
 	}
-	defer f.close()
+	defer f.Close()
 	listing, err := listStorage(f, p.Path, remote)
 	if err != nil || listing.Directory.Folder || listing.Directory.Size != p.Size {
 		return nil, PrintUnsupported.New("approved file is missing or its size changed")
 	}
 	hash := sha256.New()
-	err = f.transfer("RETR "+remote, func(data io.ReadWriter) error {
+	err = f.Retrieve(remote, func(data io.Reader) error {
 		n, err := io.Copy(hash, io.LimitReader(data, p.Size+1))
 		if err != nil {
 			return err
 		}
 		if n != p.Size {
-			return errFTP
+			return errors.New("printer file size does not match the approval")
 		}
 		return nil
 	})

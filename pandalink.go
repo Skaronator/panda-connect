@@ -1,5 +1,5 @@
-// Package pandalink registers the local Bambu Lab H3C connector with Prusa
-// Connect. Protocol details live in internal/h3c.
+// Package pandalink registers the local Bambu Lab connector with Prusa
+// Connect. Protocol details live in internal/bambu.
 package pandalink
 
 import (
@@ -7,24 +7,24 @@ import (
 
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
 	"github.com/prusa3d/prusa-connect/sdk/extension"
-	"github.com/skaronator/pandalink/internal/h3c"
+	"github.com/skaronator/pandalink/internal/bambu"
 )
 
 const (
-	Type                  = h3c.Type
-	VerbSendStateInfo     = h3c.VerbSendStateInfo
-	VerbPausePrint        = h3c.VerbPausePrint
-	VerbResumePrint       = h3c.VerbResumePrint
-	VerbStopPrint         = h3c.VerbStopPrint
-	VerbNozzleTemperature = h3c.VerbNozzleTemperature
-	VerbBedTemperature    = h3c.VerbBedTemperature
-	VerbStartPrint        = h3c.VerbStartPrint
-	DefaultTimeout        = h3c.DefaultTimeout
+	Type                  = bambu.Type
+	VerbSendStateInfo     = bambu.VerbSendStateInfo
+	VerbPausePrint        = bambu.VerbPausePrint
+	VerbResumePrint       = bambu.VerbResumePrint
+	VerbStopPrint         = bambu.VerbStopPrint
+	VerbNozzleTemperature = bambu.VerbNozzleTemperature
+	VerbBedTemperature    = bambu.VerbBedTemperature
+	VerbStartPrint        = bambu.VerbStartPrint
+	DefaultTimeout        = bambu.DefaultTimeout
 )
 
-type Driver = h3c.Driver
-type Session = h3c.Session
+type Driver = bambu.Driver
+type Session = bambu.Session
 
-func New(spec connectorapi.Spec) (connectorapi.Driver, error) { return h3c.New(spec) }
-func NewDriver(timeout time.Duration) *Driver                 { return h3c.NewDriver(timeout) }
-func Doc() extension.Doc                                      { return h3c.Doc() }
+func New(spec connectorapi.Spec) (connectorapi.Driver, error) { return bambu.New(spec) }
+func NewDriver(timeout time.Duration) *Driver                 { return bambu.NewDriver(timeout) }
+func Doc() extension.Doc                                      { return bambu.Doc() }

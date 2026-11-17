@@ -1,0 +1,1 @@
+{"print":{"command":"push_status","msg":0,"gcode_state":"RUNNING","nozzle_temper":214.5,"nozzle_target_temper":215,"bed_temper":60,"bed_target_temper":60,"task_id":"42","subtask_id":"0","gcode_file":"/example.gcode","subtask_name":"Example","mc_percent":23,"mc_remaining_time":14,"hms":[],"print_error":0}}

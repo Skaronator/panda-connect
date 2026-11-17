@@ -1,4 +1,4 @@
-package h3c
+package bambu
 
 import (
 	"bufio"

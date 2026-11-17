@@ -9,7 +9,8 @@ RUN go mod download && cd server && go mod download
 ADD --checksum=sha256:ab57efb057cc9851d34eefc3e4425939bc82b53bf97c2e35303eee35792eb00b https://codeload.github.com/prusa3d/prusa-connect/tar.gz/b194cb83b682822e95e839a3cecf4391f3929e87 /tmp/prusa-connect.tar.gz
 RUN mkdir /src/prusa-connect && tar -xzf /tmp/prusa-connect.tar.gz --strip-components=1 -C /src/prusa-connect
 
-FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS frontend
+# Only static assets leave this stage, so run Node natively rather than under QEMU.
+FROM --platform=$BUILDPLATFORM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS frontend
 ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH" HUSKY=0 CI=true
 RUN corepack enable

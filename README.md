@@ -25,8 +25,8 @@ needed. Enable **LAN-only Mode and Developer Mode** on the printer first.
 - Pause/resume/stop and nozzle/bed target commands. Descriptors and safe input
   refusals were checked through the live API; actual controls were tested only
   with the printer fake.
-- Optional printer-bound H.264 camera through the host WebRTC API. Live
-  H3C frames were received and decoded from the deployed host.
+- Optional printer-bound camera with H.264 over WebRTC and HTTP live view
+  for dashboard tiles. The Compose image includes FFmpeg for HTTP live view.
 
 See [controls, storage and print workflow](docs/protocol.md) and
 [camera setup](docs/camera.md) for API details and limitations. PandaLink does

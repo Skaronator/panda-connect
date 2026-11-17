@@ -126,7 +126,13 @@ func newTestCamera(t *testing.T, f *cameraFake) *Camera {
 
 func TestCameraContract(t *testing.T) {
 	f := startCamera(t)
-	cameraapitest.RunCameraContract(t, func(t *testing.T) cameraapi.Camera { return newTestCamera(t, f) })
+	cameraapitest.RunCameraContract(t, func(t *testing.T) cameraapi.Camera {
+		c := newTestCamera(t, f)
+		// The RTSP fake provides parameter sets only, not decodable frames.
+		// Real JPEG output is exercised in TestHTTPMJPEGFrames.
+		c.ffmpeg = ""
+		return c
+	})
 }
 
 func TestCameraTrustAndRedaction(t *testing.T) {

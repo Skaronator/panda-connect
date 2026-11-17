@@ -1,7 +1,8 @@
 # H3C live camera
 
-Use the released host's `pandalink-h3c` camera type. It serves H.264 over WebRTC;
-there are no snapshots, MJPEG, audio or H.265 conversion. LAN liveview must
+Use the released host's `pandalink-h3c` camera type. It serves H.264 over WebRTC
+and, with FFmpeg installed, MJPEG over HTTP. The Compose image includes FFmpeg.
+There are no snapshots, audio or H.265 conversion. LAN liveview must
 already be available on the printer. Camera settings do not change printer
 settings.
 
@@ -31,7 +32,14 @@ TLS verification for the released RTSP adapter. Keep the container network
 namespace isolated from untrusted processes; the internal relay is plaintext.
 
 `GET /api/v1/cameras?device=<id>` should show `watch: true` after activation.
-Use the printer's Cameras tab or post a receive-only H.264 SDP offer as
+When it also shows `stream: true`, the dashboard and printer camera tiles use
+the HTTP stream. Select `h3c-live` and press **Play**; the tile is blank before
+playback because the adapter does not supply thumbnails. The HTTP stream needs
+no UDP forwarding and works over the same connection as the dashboard. It
+converts live video to up to 960 pixels wide at 5 fps. Use **Stop** or leave
+the page when finished.
+
+To use WebRTC instead, post a receive-only H.264 SDP offer as
 `application/sdp` to `/api/v1/cameras/h3c-live/webrtc`. The response is the SDP
 answer. The client must be able to reach the host's ICE candidates, including
 its UDP ports; the Docker HTTP port mapping alone does not guarantee that a

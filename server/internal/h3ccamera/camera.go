@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -27,7 +28,7 @@ var errCamera = errors.New("H3C local camera unavailable; check LAN liveview, ac
 func init() {
 	cameraapi.Register(Type, extension.Doc{
 		Summary:     "H3C local H.264 liveview with explicit TLS certificate trust.",
-		Description: "Uses the released RTSP adapter and host WebRTC/authorization. Only the configured printer IP is contacted; credentials are read from a file and never published. Enable LAN liveview on the printer. No snapshots or H.265 conversion.",
+		Description: "Uses the released RTSP adapter and host authorization. Offers H.264 WebRTC and, when FFmpeg is installed, HTTP MJPEG for browsers without a WebRTC media path. No snapshots or H.265 conversion.",
 		Version:     "0.2.0", Contract: cameraapi.Contract, Stability: extension.StabilityExperimental,
 		Options: []extension.Option{
 			{Key: "address", Type: extension.OptionString, Required: true, Summary: "The printer's private LAN IP, without a scheme, port or credentials."},
@@ -41,6 +42,7 @@ func init() {
 
 type Camera struct {
 	address, secretFile string
+	ffmpeg              string
 	tls                 *tls.Config
 	life                context.Context
 	cancel              context.CancelFunc
@@ -86,9 +88,16 @@ func New(spec cameraapi.ProviderSpec) (cameraapi.Camera, error) {
 		cfg.ServerName = ip.String()
 	}
 	life, cancel := context.WithCancel(context.Background())
-	return &Camera{address: net.JoinHostPort(ip.String(), "322"), secretFile: options["access_code_file"], tls: cfg, life: life, cancel: cancel}, nil
+	ffmpeg, _ := exec.LookPath("ffmpeg")
+	return &Camera{address: net.JoinHostPort(ip.String(), "322"), secretFile: options["access_code_file"], ffmpeg: ffmpeg, tls: cfg, life: life, cancel: cancel}, nil
 }
-func (c *Camera) Formats() []cameraapi.Format { return []cameraapi.Format{cameraapi.FormatH264AnnexB} }
+func (c *Camera) Formats() []cameraapi.Format {
+	formats := []cameraapi.Format{cameraapi.FormatH264AnnexB}
+	if c.ffmpeg != "" {
+		formats = append(formats, cameraapi.FormatMJPEG)
+	}
+	return formats
+}
 func (c *Camera) Snapshot(context.Context) (cameraapi.Snapshot, error) {
 	return cameraapi.Snapshot{}, cameraapi.ErrFormatNotSupported
 }
@@ -98,9 +107,17 @@ func (c *Camera) Close() error { c.cancel(); return nil }
 // single-connection loopback relay per Open adds authenticated TLS. It is not
 // exposed on the LAN, is never shared, and dies with the stream.
 func (c *Camera) Open(ctx context.Context, format cameraapi.Format) (cameraapi.Stream, error) {
+	if format == cameraapi.FormatMJPEG && c.ffmpeg != "" {
+		return c.openMJPEG(ctx)
+	}
 	if format != cameraapi.FormatH264AnnexB {
 		return cameraapi.Stream{}, cameraapi.ErrFormatNotSupported
 	}
+	return c.openH264(ctx)
+}
+
+func (c *Camera) openH264(ctx context.Context) (cameraapi.Stream, error) {
+	const format = cameraapi.FormatH264AnnexB
 	// The host transfers Body to WebRTC and returns the SDP response. The
 	// HTTP request context ends at that point, not when the viewer leaves.
 	// Observe request cancellation only until Open completes.

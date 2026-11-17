@@ -1,6 +1,6 @@
 # Bambu Lab compatibility
 
-## PandaLink verification
+## Panda Connect verification
 
 | Model | Firmware | Monitoring | Inventory | Controls | Storage listing | Upload | Print start | Camera |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -8,8 +8,8 @@
 | A1 mini | `01.07.02.00` (fixture source) | fake-tested | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable |
 | P2S | `01.02.00.00` (identity fixture source) | fake-tested | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable |
 
-These ratings apply to PandaLink, not to the printer's own capabilities.
-`unavailable` means there is no enabled PandaLink implementation for that
+These ratings apply to Panda Connect, not to the printer's own capabilities.
+`unavailable` means there is no enabled Panda Connect implementation for that
 model. Other catalog profiles have synthetic handshake coverage but no
 model-specific telemetry evidence, so monitoring is `unknown`. Optional features
 are unavailable for every non-H3C profile. For H3C, the
@@ -17,7 +17,7 @@ are unavailable for every non-H3C profile. For H3C, the
 changes and live API checks from execution of physical commands.
 
 A1 mini, P2S, and H3C fakes were connected to the pinned Prusa Connect server
-on the same `pandalink` connector. The two read-only devices advertised only
+on the same `panda-connect` connector. The two read-only devices advertised only
 status refresh, and the host refused a heater command for each before it could
 reach the printer. H3C still advertised its heater control.
 
@@ -55,11 +55,11 @@ marketing name in that case. This is not a complete regional inventory.
    code setup](../README.md#run-locally-with-docker-compose). Public observations
    for `01.07.02.00` indicate Developer Mode is not necessary for reads. Leave
    it off unless you need it for another purpose.
-2. Use `pandalink` for every model. For an existing deployment, create the
-   endpoint through the host endpoint API using the printer's own serial,
-   access code file and TLS pin. If you already configured an endpoint on
-   `pandalink-monitor`, switch it to `pandalink` and remove the old connector
-   instance from the server configuration.
+2. Use `panda-connect` for new deployments. Create new endpoints through the
+   host endpoint API using the printer's own serial, access code file and TLS
+   pin. Existing `pandalink` configurations still work. If the endpoint uses
+   `pandalink-monitor`, switch it to the active connector instance and remove
+   the old instance from the server configuration.
 3. Run `python3 scripts/smoke.py --require-model P2S`, replacing `P2S` with your
    model from the table. For non-H3C printers it checks that both device API
    responses advertise only `core.command.send_state_info`.
@@ -78,7 +78,7 @@ none at all.
 
 If you have an A1 mini or another candidate, share the model, firmware, LAN
 settings, attached accessories and which checks passed. The smoke output and
-`pandalink-probe` output are for local inspection: remove device and job IDs,
+`panda-connect-probe` output are for local inspection: remove device and job IDs,
 printer or accessory serials, private addresses, access codes and job names
 before sharing logs or fixtures. Repeat the smoke check after firmware updates.
 Do not start, pause, or otherwise change a print just to collect telemetry

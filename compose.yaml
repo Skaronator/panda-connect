@@ -1,7 +1,7 @@
-name: pandalink
+name: panda-connect
 services:
   prusa-connect:
-    image: pandalink-prusa-connect:local
+    image: panda-connect-prusa-connect:local
     build:
       context: .
       dockerfile: Dockerfile
@@ -9,9 +9,9 @@ services:
     init: true
     env_file: .env
     ports:
-      - "127.0.0.1:${PANDALINK_PORT:-8081}:8080"
+      - "127.0.0.1:${PANDA_CONNECT_PORT:-8081}:8080"
     volumes:
-      - pandalink-data:/data
+      - panda-connect-data:/data
     secrets:
       - bambu_access_code
     read_only: true
@@ -33,13 +33,13 @@ services:
         max-size: "10m"
         max-file: "3"
     labels:
-      org.opencontainers.image.title: PandaLink local test server
-      io.pandalink.role: printer-monitor
-    networks: [pandalink]
+      org.opencontainers.image.title: Panda Connect local test server
+      io.panda-connect.role: printer-monitor
+    networks: [panda-connect]
 volumes:
-  pandalink-data:
+  panda-connect-data:
 networks:
-  pandalink:
+  panda-connect:
 secrets:
   bambu_access_code:
     file: .secrets/access_code

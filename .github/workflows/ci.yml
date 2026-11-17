@@ -65,8 +65,8 @@ jobs:
           context: .
           platforms: ${{ env.IMAGE_PLATFORMS }}
           push: false
-          cache-from: type=gha,scope=pandalink
-          cache-to: type=gha,scope=pandalink,mode=max
+          cache-from: type=gha,scope=panda-connect
+          cache-to: type=gha,scope=panda-connect,mode=max
 
   release:
     name: Release Please
@@ -121,7 +121,7 @@ jobs:
           context: .
           platforms: ${{ env.IMAGE_PLATFORMS }}
           push: true
-          cache-from: type=gha,scope=pandalink
+          cache-from: type=gha,scope=panda-connect
           tags: |
             ${{ steps.image.outputs.name }}:${{ needs.release.outputs.tag }}
             ${{ steps.image.outputs.name }}:latest

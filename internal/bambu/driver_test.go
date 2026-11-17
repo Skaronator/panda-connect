@@ -23,21 +23,21 @@ func TestContract(t *testing.T) {
 }
 
 func TestRegistration(t *testing.T) {
-	namespace, err := extension.NamespaceOf("github.com/skaronator/pandalink")
-	if err != nil || namespace.String() != "com.github.aux.skaronator.pandalink" {
+	namespace, err := extension.NamespaceOf("github.com/skaronator/panda-connect")
+	if err != nil || namespace.String() != "com.github.aux.skaronator.panda-connect" {
 		t.Fatalf("namespace: %s, %v", namespace, err)
 	}
 	if err = connectorapi.ValidateDialect(dialect()); err != nil {
 		t.Fatal(err)
 	}
-	found := false
+	found := make(map[string]bool)
 	for _, d := range connectorapi.Descriptors() {
-		if d.Name() == Type.String() {
-			found = true
-		}
+		found[d.Name()] = true
 	}
-	if !found {
-		t.Fatal("PandaLink is not registered")
+	for _, name := range []string{"panda-connect", "pandalink"} {
+		if !found[name] {
+			t.Errorf("connector %q is not registered", name)
+		}
 	}
 	for _, option := range Doc().Options {
 		if option.Key == "timeout" && option.Default != DefaultTimeout.String() {

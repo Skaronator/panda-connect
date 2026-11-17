@@ -1,4 +1,4 @@
-module github.com/skaronator/pandalink
+module github.com/skaronator/panda-connect
 
 go 1.26.11
 

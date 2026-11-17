@@ -1,7 +1,7 @@
 # H3C live camera
 
-For new configurations, use the host camera type `pandalink-rtsps`. Existing
-`pandalink-h3c` records remain supported as an alias and need no migration.
+For new configurations, use the host camera type `panda-connect-rtsps`.
+Existing `pandalink-rtsps` and `pandalink-h3c` records still work without migration.
 This type is for the verified RTSPS workflow, not every Bambu camera.
 It serves H.264 over WebRTC
 and, with FFmpeg installed, MJPEG over HTTP. The Compose image includes FFmpeg.
@@ -16,7 +16,7 @@ is enabled. Example body:
 
 ```json
 {
-  "type": "pandalink-rtsps",
+  "type": "panda-connect-rtsps",
   "config": {
     "printer": "<host printer ID>",
     "address": "192.168.1.100",

@@ -11,7 +11,7 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
-	"github.com/skaronator/pandalink/internal/telemetry"
+	"github.com/skaronator/panda-connect/internal/telemetry"
 )
 
 type identityAnswer struct {
@@ -196,7 +196,7 @@ func (s *Session) run() {
 		case <-s.done:
 			return
 		case <-stale.C:
-			s.log.Warn("PandaLink telemetry timed out; ending session")
+			s.log.Warn("Panda Connect telemetry timed out; ending session")
 			return
 		case output <- patch:
 			delete(pending, patch.Path)

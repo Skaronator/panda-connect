@@ -37,7 +37,7 @@ for writes by other clients; explicitly refresh to see them.
 
 FTPS uses implicit TLS 1.2, a verified pin or CA, `PROT P`, passive connections
 to the control peer, and TLS session reuse. Listing ignores symlinks and checks
-ancestor directories before traversing them. PandaLink exposes no deletion,
+ancestor directories before traversing them. Panda Connect exposes no deletion,
 folder creation, or download API. Upload requires `allow_uploads: "true"` in
 endpoint options. It streams at most 2 GiB and checks the final name and size.
 `LIST` followed by `STOR` is **not atomic**: another client can create a file
@@ -83,7 +83,7 @@ metadata. Example (replace the size and digest with the actual values):
 
 Only root-level, already-sliced `.gcode.3mf` files with a simple ASCII basename
 are accepted. `single_plate` attests that the archive has only plate 1 and that
-`Metadata/plate_1.gcode` is the intended slice; PandaLink does not open, validate,
+`Metadata/plate_1.gcode` is the intended slice; Panda Connect does not open, validate,
 or slice projects. List every used slicer filament in dense mapping order
 starting at index zero; unused/sparse indices are unsupported. The manifest
 also attests that the file, build plate and calibration are appropriate. The

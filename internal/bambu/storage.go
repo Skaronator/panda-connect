@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
-	"github.com/skaronator/pandalink/internal/ftps"
+	"github.com/skaronator/panda-connect/internal/ftps"
 )
 
 const storageName = "sdcard"

@@ -1,4 +1,4 @@
-// pandalink-probe reads a printer without sending motion, heater or print commands.
+// panda-connect-probe reads a printer without sending motion, heater or print commands.
 package main
 
 import (
@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
-	"github.com/skaronator/pandalink/connector"
+	"github.com/skaronator/panda-connect/connector"
 )
 
 func main() {

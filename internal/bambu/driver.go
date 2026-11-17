@@ -19,21 +19,27 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
 	"github.com/prusa3d/prusa-connect/sdk/extension"
-	"github.com/skaronator/pandalink/internal/mqttwire"
-	"github.com/skaronator/pandalink/internal/printertls"
-	"github.com/skaronator/pandalink/internal/secret"
+	"github.com/skaronator/panda-connect/internal/mqttwire"
+	"github.com/skaronator/panda-connect/internal/printertls"
+	"github.com/skaronator/panda-connect/internal/secret"
 )
 
 const (
-	// Type selects PandaLink in core.connectors.
-	Type connectorapi.TypeName = "pandalink"
+	// Type selects Panda Connect in core.connectors.
+	Type       connectorapi.TypeName = "panda-connect"
+	legacyType connectorapi.TypeName = "pandalink" // Existing host configs keep their type.
 	// VerbSendStateInfo requests a full telemetry report, without changing the printer.
 	VerbSendStateInfo connectorapi.Capability = "core.command.send_state_info"
 	// DefaultTimeout bounds the MQTT handshake and an explicit refresh.
 	DefaultTimeout = 15 * time.Second
 )
 
-func init() { connectorapi.Register(Type, Doc(), New, dialect()) }
+func init() {
+	doc, about := Doc(), dialect()
+	connectorapi.Register(Type, doc, New, about)
+	doc.Summary = "Compatibility alias for existing Panda Connect configurations."
+	connectorapi.Register(legacyType, doc, New, about)
+}
 
 // Doc describes the driver and its connector-wide settings.
 func Doc() extension.Doc {
@@ -174,7 +180,7 @@ func (d *Driver) Connect(ctx context.Context, endpoint connectorapi.Endpoint, pr
 	_, _ = rand.Read(seed[:])
 	s.sequence.Store(uint64(binary.BigEndian.Uint32(seed[:]) & 0x3fffffff))
 	opts := mqtt.NewClientOptions().AddBroker("ssl://" + address).
-		SetClientID("pandalink-" + rand.Text()[:16]).SetUsername("bblp").SetPassword(secret).
+		SetClientID("panda-connect-" + rand.Text()[:16]).SetUsername("bblp").SetPassword(secret).
 		SetTLSConfig(tlsConfig).SetProtocolVersion(4).SetCleanSession(true).
 		SetAutoReconnect(false).SetConnectRetry(false).SetConnectTimeout(d.timeout).
 		SetWriteTimeout(d.timeout).SetKeepAlive(30 * time.Second).SetPingTimeout(10 * time.Second).
@@ -343,7 +349,7 @@ func decodeIdentity(frame []byte, serial string) (identityAnswer, bool) {
 		}
 		model, ok := modelForProduct(module.Product)
 		if !ok {
-			return identityAnswer{err: DeviceUnreachable.New("the reported printer model has no enabled PandaLink profile")}, true
+			return identityAnswer{err: DeviceUnreachable.New("the reported printer model has no enabled Panda Connect profile")}, true
 		}
 		answer = identityAnswer{model: model, identity: connectorapi.Identity{Vendor: model.device.Vendor, Model: model.device.Model, Serial: serial, UnitUID: "bambu:" + serial, Firmware: connectorapi.NewFirmwareLabel(module.Firmware)}}
 	}

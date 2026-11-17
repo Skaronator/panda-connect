@@ -7,7 +7,7 @@ import (
 
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
 	"github.com/prusa3d/prusa-connect/sdk/extension"
-	"github.com/skaronator/pandalink/internal/bambu"
+	"github.com/skaronator/panda-connect/internal/bambu"
 )
 
 const (

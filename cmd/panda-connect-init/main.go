@@ -1,4 +1,4 @@
-// pandalink-init seeds a new local-test deployment. Existing files are never replaced.
+// panda-connect-init seeds a new local-test deployment. Existing files are never replaced.
 package main
 
 import (
@@ -12,10 +12,10 @@ import (
 
 func main() {
 	data := flag.String("data-dir", "/data", "directory holding this deployment")
-	template := flag.String("template", "/etc/pandalink/config.yaml", "initial server config")
+	template := flag.String("template", "/etc/panda-connect/config.yaml", "initial server config")
 	flag.Parse()
 	if err := initialize(*data, *template, os.Getenv); err != nil {
-		fmt.Fprintln(os.Stderr, "pandalink-init:", err)
+		fmt.Fprintln(os.Stderr, "panda-connect-init:", err)
 		os.Exit(1)
 	}
 }
@@ -33,7 +33,7 @@ func initialize(data, template string, getenv func(string) string) error {
 	}
 	path := filepath.Join(data, "config.d", "resources.json")
 	if _, err = os.Stat(path); err == nil {
-		fmt.Println("PandaLink: keeping existing deployment and endpoints; use the endpoint API to change them.")
+		fmt.Println("Panda Connect: keeping existing deployment and endpoints; use the endpoint API to change them.")
 		return nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -48,7 +48,7 @@ func initialize(data, template string, getenv func(string) string) error {
 		"version": 1, "instances": []any{},
 		"auth": map[string]string{"mode": "open"}, "admission": map[string]string{"mode": "open"},
 		"endpoints": []any{map[string]any{
-			"name": "bambu-printer", "connector": "pandalink", "address": address, "enabled": true,
+			"name": "bambu-printer", "connector": "panda-connect", "address": address, "enabled": true,
 			"options": map[string]string{"serial": serial, "access_code_file": "/run/secrets/bambu_access_code", "tls_fingerprint": pin},
 		}},
 	}
@@ -59,7 +59,7 @@ func initialize(data, template string, getenv func(string) string) error {
 	if err = writeNew(path, append(raw, '\n')); err != nil {
 		return err
 	}
-	fmt.Println("PandaLink: initialized loopback-only local test deployment without login.")
+	fmt.Println("Panda Connect: initialized loopback-only local test deployment without login.")
 	return nil
 }
 

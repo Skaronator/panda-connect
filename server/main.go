@@ -1,12 +1,12 @@
-// This module composes the pinned Prusa Connect release with the local PandaLink driver.
+// This module composes the pinned Prusa Connect release with the local Panda Connect driver.
 package main
 
 import (
 	"os"
 
 	"github.com/prusa3d/prusa-connect/compose"
-	_ "github.com/skaronator/pandalink/connector"
-	_ "github.com/skaronator/pandalink/server/internal/bambucamera"
+	_ "github.com/skaronator/panda-connect/connector"
+	_ "github.com/skaronator/panda-connect/server/internal/bambucamera"
 )
 
 func main() { os.Exit(compose.Main()) }

@@ -15,7 +15,7 @@ import (
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
 )
 
-// PrintApproval attests to an exact, already-sliced file. PandaLink does not
+// PrintApproval attests to an exact, already-sliced file. Panda Connect does not
 // validate or slice arbitrary 3MF projects. The manifest is trusted operator input.
 type PrintApproval struct {
 	Path        string          `json:"path"`
@@ -139,7 +139,7 @@ func (s *Session) preparePrint(ctx context.Context, cmd connectorapi.Command) (m
 	}
 	fields["param"] = "Metadata/plate_1.gcode"
 	// Bambu's project_file treats this as a printer-local FTP-root filename,
-	// not a URL for PandaLink or the released host to fetch. Root files only.
+	// not a URL for Panda Connect or the released host to fetch. Root files only.
 	fields["url"] = "ftp://" + path.Base(remote)
 	fields["file"] = path.Base(remote)
 	fields["bed_type"], fields["md5"], fields["extrude_cali_manual_mode"] = "auto", "", 0

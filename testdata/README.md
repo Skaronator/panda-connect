@@ -13,7 +13,7 @@ They cover the initial monitoring subset, not the complete H3C protocol.
 [bambu-rs A1 mini captures][source] (`01.07.02.00`, LAN mode, AMS Lite class
 attached). The version fixture substitutes a test serial. The idle fixture
 keeps only scalar monitoring fields and omits network, accessory and camera
-data. Neither fixture was collected by PandaLink.
+data. Neither fixture was collected by Panda Connect.
 
 The `a1-mini-*.synthetic.json` files are synthetic running and paused reports
 for parser and reconnect coverage. They make no claim about real running job

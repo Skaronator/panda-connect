@@ -28,6 +28,9 @@ func TestInitializeAndPreserve(t *testing.T) {
 	if strings.Contains(string(before), "test-code") || !strings.Contains(string(before), "/run/secrets/bambu_access_code") {
 		t.Fatal("overlay contains credentials or omits the secret reference")
 	}
+	if !strings.Contains(string(before), `"connector": "panda-connect"`) {
+		t.Fatal("overlay does not select the Panda Connect connector")
+	}
 	if err = initialize(dir, template, func(string) string { return "" }); err != nil {
 		t.Fatal(err)
 	}

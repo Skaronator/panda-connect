@@ -5,15 +5,15 @@ core:
   api:
     addr: ":8080"
   connectors:
-    pandalink:
-      type: pandalink
+    panda-connect:
+      type: panda-connect
       enabled: true
       config:
         timeout: 15s
         stale_after: 2m
   frontend:
     enabled: true
-    title: "PandaLink — local test"
+    title: "Panda Connect — local test"
   authz:
     database: /data/config.d/authz.db
   overlay: /data/config.d/resources.json

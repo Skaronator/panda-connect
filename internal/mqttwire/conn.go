@@ -41,7 +41,7 @@ func (c *Conn) Read(p []byte) (int, error) {
 	c.length |= int(p[0]&127) << (7 * c.digits)
 	c.digits++
 	if c.length > MaxPayloadBytes+256 || c.digits == 4 && p[0]&128 != 0 {
-		return 0, errors.New("MQTT frame exceeds PandaLink's limit or has an invalid length")
+		return 0, errors.New("MQTT frame exceeds Panda Connect's limit or has an invalid length")
 	}
 	if p[0]&128 == 0 {
 		c.body = c.length

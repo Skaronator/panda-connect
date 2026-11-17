@@ -17,12 +17,11 @@ import (
 	"github.com/prusa3d/prusa-connect/adapters/camera/rtsp"
 	"github.com/prusa3d/prusa-connect/sdk/cameraapi"
 	"github.com/prusa3d/prusa-connect/sdk/extension"
-	"github.com/skaronator/pandalink/internal/printertls"
-	"github.com/skaronator/pandalink/internal/secret"
+	"github.com/skaronator/panda-connect/internal/printertls"
+	"github.com/skaronator/panda-connect/internal/secret"
 )
 
-const Type = "pandalink-rtsps"
-const legacyType = "pandalink-h3c" // Existing host camera records keep their type.
+const Type = "panda-connect-rtsps"
 
 var errCamera = errors.New("Bambu local camera unavailable; check LAN liveview, access-code file and camera certificate trust")
 
@@ -40,8 +39,10 @@ func init() {
 		},
 	}
 	cameraapi.Register(Type, doc, New)
-	doc.Summary = "Compatibility alias for existing PandaLink H3C cameras."
-	cameraapi.Register(legacyType, doc, New)
+	// Existing host camera records keep their type.
+	doc.Summary = "Compatibility alias for existing Bambu local cameras."
+	cameraapi.Register("pandalink-rtsps", doc, New)
+	cameraapi.Register("pandalink-h3c", doc, New)
 }
 
 type Camera struct {

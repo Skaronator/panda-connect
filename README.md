@@ -1,8 +1,8 @@
-# PandaLink
+# Panda Connect
 
-PandaLink is a local Bambu Lab printer driver for the self-hosted
+Panda Connect is a local Bambu Lab printer driver for the self-hosted
 [Prusa Connect](https://github.com/prusa3d/prusa-connect) server.
-The `pandalink` connector selects a profile from the printer's reported identity.
+The `panda-connect` connector selects a profile from the printer's reported identity.
 H3C is hardware-verified; the other [listed models](docs/compatibility.md) are
 enabled for read-only monitoring and still need hardware verification.
 
@@ -33,7 +33,7 @@ for other models, start with the [read-only setup](docs/compatibility.md#test-a-
   for dashboard tiles. The Compose image includes FFmpeg for HTTP live view.
 
 See [controls, storage and print workflow](docs/protocol.md) and
-[camera setup](docs/camera.md) for API details and limitations. PandaLink does
+[camera setup](docs/camera.md) for API details and limitations. Panda Connect does
 not move axes, manage filament or drying, or create/delete printer files or
 directories. See the [acceptance record](docs/acceptance.md)
 for the distinction between live hardware and fake-only checks, and the
@@ -71,7 +71,7 @@ build. Go and Node.js are built inside the image. No sibling repository is read.
    newer on the host:
 
    ```sh
-   go run ./cmd/pandalink-probe \
+   go run ./cmd/panda-connect-probe \
      -address 192.168.1.100:8883 -inspect-certificate
    ```
 
@@ -84,7 +84,7 @@ build. Go and Node.js are built inside the image. No sibling repository is read.
 
    ```sh
    docker compose build
-   docker compose run --rm --no-deps --entrypoint /usr/local/bin/pandalink-probe \
+   docker compose run --rm --no-deps --entrypoint /usr/local/bin/panda-connect-probe \
      prusa-connect -address 192.168.1.100:8883 -inspect-certificate
    ```
 
@@ -96,7 +96,7 @@ build. Go and Node.js are built inside the image. No sibling repository is read.
    ```
 
 5. Open **http://localhost:8081**. The printer is added automatically on the
-   first start. Change `PANDALINK_PORT` in `.env` if the port is occupied.
+   first start. Change `PANDA_CONNECT_PORT` in `.env` if the port is occupied.
 
 **This is a local development setup without login.** The published port binds
 to `127.0.0.1`, not the LAN. Do not expose it through a public port, tunnel or
@@ -105,11 +105,11 @@ the Compose network can also reach this development API.
 
 ### Data and configuration
 
-The `pandalink-data` named volume holds the server configuration, authorization
+The `panda-connect-data` named volume holds the server configuration, authorization
 database, printer identity, endpoints and job history. It is writable by the
 non-root server user; the rest of the container filesystem is read-only.
 
-On the **first start only**, `pandalink-init` seeds `/data/config.yaml` and the
+On the **first start only**, `panda-connect-init` seeds `/data/config.yaml` and the
 host's initial resource overlay from `.env`. Existing files are never replaced.
 After that, change the printer endpoint through the Prusa Connect endpoint API
 (`/api/v1/connector-endpoints`; see `/docs` for its schema and version headers).
@@ -131,6 +131,24 @@ docker compose down
 
 Do not add `--volumes` unless you intend to delete the deployment's saved data.
 
+#### Upgrading an existing PandaLink deployment
+
+The renamed Compose project uses a new volume by default. To keep your saved
+configuration and history, stop the old server with
+`docker compose -p pandalink stop prusa-connect` (use your old project name if
+you customized it). Create `compose.override.yaml` before starting the new server:
+
+```yaml
+volumes:
+  panda-connect-data:
+    external: true
+    name: pandalink_pandalink-data
+```
+
+Use the actual volume name if it differs. Existing `pandalink` connector and
+camera IDs still work. Rename `PANDALINK_PORT` to `PANDA_CONNECT_PORT` in `.env`
+and `PANDALINK_URL` to `PANDA_CONNECT_URL` if you set it for the smoke check.
+
 ## Check the connection
 
 Read normalized telemetry from the running container:
@@ -146,12 +164,12 @@ task smoke
 ```
 
 The smoke check needs Python 3 and defaults to `http://127.0.0.1:8081`.
-For another port, set `PANDALINK_URL=http://127.0.0.1:PORT`.
+For another port, set `PANDA_CONNECT_URL=http://127.0.0.1:PORT`.
 For a connected H3C with an AMS 3H, `task acceptance` also checks control
 descriptors, invalid inputs that cannot publish printer controls, and FTPS
 storage browsing.
 
-An informational `no_capability_profile` issue is expected: PandaLink ships no
+An informational `no_capability_profile` issue is expected: Panda Connect ships no
 host firmware matrix. `/api/v1/devices/{id}/capabilities` shows the commands and
 argument descriptors narrowed by the reported printer identity and endpoint
 settings. The broader authorization verb list is not the capability list.
@@ -181,7 +199,7 @@ PR builds never publish an image.
 
 Release Please uses [Conventional Commits](https://www.conventionalcommits.org/)
 such as `feat:` and `fix:` to open a release PR. Merge that PR to create a
-GitHub release and publish `ghcr.io/skaronator/pandalink` with the release tag
+GitHub release and publish `ghcr.io/skaronator/panda-connect` with the release tag
 (such as `v1.2.3`) and `latest`. Both tags support AMD64 and ARM64; Docker
 selects the matching image when you pull.
 
@@ -203,7 +221,7 @@ to retry it without recreating the release.
   `b194cb83b682822e95e839a3cecf4391f3929e87`.
 
 `server/` is a separate Go module that imports the released server and this
-repository's driver. Its only local replacement is PandaLink itself. Neither
+repository's driver. Its only local replacement is Panda Connect itself. Neither
 the upstream server nor SDK is replaced with a local directory.
 
 `internal/bambu/` owns the driver, sessions, and model capabilities.
@@ -237,14 +255,14 @@ verification and a new endpoint pin.
 
 Connector settings `timeout` (default `15s`) and `stale_after` (default `2m`)
 bound the initial handshake/refresh and telemetry silence respectively.
-PandaLink closes a lost or stale state stream; Prusa Connect then reconnects
+Panda Connect closes a lost or stale state stream; Prusa Connect then reconnects
 with its own backoff. Paho's separate automatic reconnect loop is disabled.
 Slow consumers keep the newest pending value per known state path, including
 fields sent only once; replaced pending patches are counted in link telemetry.
 
 ## License
 
-PandaLink's source is AGPL-3.0; see [LICENSE](LICENSE). Prusa Connect and its SDK
+Panda Connect's source is AGPL-3.0; see [LICENSE](LICENSE). Prusa Connect and its SDK
 carry their upstream license terms. The Docker image combines both projects;
 confirm the applicable distribution terms with the upstream maintainers before
 publishing or redistributing it. This repository's license does not relicense

@@ -29,12 +29,12 @@ def check(args):
         if not request(path):
             raise RuntimeError(f"Empty frontend asset: {path}")
     devices = json.loads(request("/api/v1/devices"))["items"]
-    printers = [d for d in devices if d["driver"] == "pandalink" and d["connected"]]
+    printers = [d for d in devices if d["driver"] in {"panda-connect", "pandalink"} and d["connected"]]
     if not printers:
-        raise RuntimeError("No connected PandaLink printer; check docker compose logs")
+        raise RuntimeError("No connected Panda Connect printer; check docker compose logs")
     required = "A1 mini" if args.require_a1_mini else args.require_model
     if required and not any(d["model"] == required for d in printers):
-        raise RuntimeError(f"No connected {required} on pandalink")
+        raise RuntimeError(f"No connected {required} on Panda Connect")
     if args.acceptance and not any(d["model"] == "H3C" for d in printers):
         raise RuntimeError("H3C acceptance requires a connected H3C")
     for printer in printers:
@@ -138,7 +138,7 @@ if __name__ == "__main__":
     model = parser.add_mutually_exclusive_group()
     model.add_argument("--require-model", help="fail unless this model is connected")
     model.add_argument("--require-a1-mini", action="store_true", help="alias for --require-model 'A1 mini'")
-    base = os.environ.get("PANDALINK_URL", "http://127.0.0.1:8081").rstrip("/")
+    base = os.environ.get("PANDA_CONNECT_URL", "http://127.0.0.1:8081").rstrip("/")
     try:
         check(parser.parse_args())
     except Exception as error:

@@ -1,10 +1,10 @@
-module github.com/skaronator/pandalink/server
+module github.com/skaronator/panda-connect/server
 
 go 1.26.11
 
 require (
 	github.com/prusa3d/prusa-connect v0.1.0-beta.1
-	github.com/skaronator/pandalink v0.0.0
+	github.com/skaronator/panda-connect v0.0.0
 )
 
 require (
@@ -61,4 +61,4 @@ require (
 )
 
 // Compose the driver being developed here. Prusa Connect and its SDK are real releases.
-replace github.com/skaronator/pandalink => ..
+replace github.com/skaronator/panda-connect => ..

@@ -7,7 +7,7 @@ import (
 )
 
 var faultDomain = func() fault.Domain {
-	domain, err := fault.NewDomain("com.github.aux.skaronator.pandalink")
+	domain, err := fault.NewDomain("com.github.aux.skaronator.panda-connect")
 	if err != nil {
 		panic(err)
 	}
@@ -32,7 +32,7 @@ var (
 		"The printer control was refused", "Check printer state and its display.", fault.RetryNever, fault.ShowDetail,
 	))
 	InvalidConfig = fault.Register(faultDomain, "INVALID_CONFIG", http.StatusBadRequest, fault.Document(
-		"PandaLink configuration is invalid", "Check the endpoint address, serial, access-code file and TLS settings.", fault.RetryNever, fault.ShowDetail,
+		"Panda Connect configuration is invalid", "Check the endpoint address, serial, access-code file and TLS settings.", fault.RetryNever, fault.ShowDetail,
 	))
 	DeviceUnreachable = fault.Register(faultDomain, "DEVICE_UNREACHABLE", http.StatusBadGateway, fault.Document(
 		"The Bambu printer did not answer", "Check connectivity, LAN-only mode, Developer Mode, the access code and the TLS certificate pin.", fault.RetryAllowed, fault.ShowDetail,

@@ -46,7 +46,7 @@ tasks:
   probe:
     desc: Read printer telemetry from the running container
     cmds:
-      - docker compose exec -T prusa-connect /usr/local/bin/pandalink-probe -duration 10s
+      - docker compose exec -T prusa-connect /usr/local/bin/panda-connect-probe -duration 10s
 
   smoke:
     desc: Check the UI assets, live API and status refresh

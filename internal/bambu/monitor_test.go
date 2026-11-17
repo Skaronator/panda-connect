@@ -8,7 +8,7 @@ import (
 
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi/connectorapitest"
-	"github.com/skaronator/pandalink/internal/telemetry"
+	"github.com/skaronator/panda-connect/internal/telemetry"
 )
 
 func a1Fake(t *testing.T, report string) *fakePrinter {

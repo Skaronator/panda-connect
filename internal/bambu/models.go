@@ -2,7 +2,7 @@ package bambu
 
 import (
 	"github.com/prusa3d/prusa-connect/sdk/connectorapi"
-	"github.com/skaronator/pandalink/internal/telemetry"
+	"github.com/skaronator/panda-connect/internal/telemetry"
 )
 
 const (

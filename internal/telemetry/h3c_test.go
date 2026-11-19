@@ -75,6 +75,32 @@ func TestPackedTemperatures(t *testing.T) {
 	}
 }
 
+func TestH3CPackedTemperatureUnavailable(t *testing.T) {
+	var parser H3C
+	for i, frame := range []string{
+		`{"print":{"command":"push_status","device":{"bed":{"info":{"temp":4587590}},"extruder":{"info":[{"id":0,"temp":16711935}]}}}}`,
+		`{"print":{"command":"push_status","msg":1,"device":{"bed":{"info":{"temp":65535}},"extruder":{"info":[{"id":0,"temp":65535}]}}}}`,
+	} {
+		patches, _, _, err := parser.Parse([]byte(frame))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			continue
+		}
+		values := patchValues(patches)
+		for path, want := range map[string]string{
+			"/tools/0/nozzle_temp": "null", "/tools/0/nozzle_target_temp": "0",
+			"/bambu/active_nozzle_temp": "null", "/bambu/active_nozzle_target_temp": "0",
+			"/temperature/bed": "null", "/temperature/bed_target": "0",
+		} {
+			if values[path] != want {
+				t.Errorf("%s = %q, want %s", path, values[path], want)
+			}
+		}
+	}
+}
+
 func TestJobLifecycle(t *testing.T) {
 	var parser H3C
 	_, _, _, _ = parser.Parse(fixture(t, "h3c-running.json"))
@@ -92,6 +118,35 @@ func TestJobLifecycle(t *testing.T) {
 	values := patchValues(patches)
 	if values["/job/id"] != `"task:2286"` || values["/job/outcome"] != "null" || values["/job/progress"] != "0" {
 		t.Fatalf("new job: %v", values)
+	}
+}
+
+func TestH3CChamberReadings(t *testing.T) {
+	var parser H3C
+	for _, tc := range []struct {
+		wire, current, target, light string
+	}{
+		{`"msg":0,"device":{"ctc":{"info":{"temp":3932207,"target":55}}},"lights_report":[{"node":"work_light","mode":"flashing"},{"node":"chamber_light","mode":"on"}]`, "47", "55", "100"},
+		{`"msg":1,"device":{"ctc":{"info":{"temp":3932207}}}`, "47", "60", ""},
+		{`"msg":1,"ctt":0`, "", "0", ""},
+		{`"msg":1,"lights_report":[{"node":"work_light","mode":"off"}],"big_fan1_speed":"10"`, "", "", ""},
+		{`"msg":1,"device":{"ctc":{"info":{"temp":49,"target":0}}},"lights_report":[{"node":"chamber_light","mode":"off"}]`, "49", "0", "0"},
+		{`"msg":1,"device":{"ctc":{"info":{"temp":65535,"target":65535}}},"lights_report":[{"node":"chamber_light","mode":"flashing"}]`, "null", "null", "null"},
+		{`"msg":0`, "", "null", "null"},
+	} {
+		patches, _, _, err := parser.Parse([]byte(`{"print":{"command":"push_status",` + tc.wire + `}}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		values := patchValues(patches)
+		for path, want := range map[string]string{
+			"/temperature/chamber": tc.current, "/temperature/chamber_target": tc.target,
+			"/chamber/led_intensity": tc.light, "/chamber/fan_pwm_target": "",
+		} {
+			if values[path] != want {
+				t.Errorf("%s: %s = %q, want %q", tc.wire, path, values[path], want)
+			}
+		}
 	}
 }
 

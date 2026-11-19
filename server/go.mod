@@ -3,7 +3,8 @@ module github.com/skaronator/panda-connect/server
 go 1.26.11
 
 require (
-	github.com/prusa3d/prusa-connect v0.1.0-beta.1
+	github.com/prusa3d/prusa-connect v0.1.0-beta.1.0.20261118080352-ca11b9522aad
+	github.com/prusa3d/prusa-connect/sdk v0.1.0-beta.1
 	github.com/skaronator/panda-connect v0.0.0
 )
 
@@ -43,11 +44,10 @@ require (
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/common v0.72.0 // indirect
 	github.com/prometheus/procfs v0.22.0 // indirect
-	github.com/prusa3d/prusa-connect/sdk v0.1.0-beta.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
-	golang.org/x/crypto v0.58.0 // indirect
+	golang.org/x/crypto v0.59.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sync v0.25.0 // indirect
 	golang.org/x/sys v0.50.0 // indirect

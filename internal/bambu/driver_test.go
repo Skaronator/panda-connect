@@ -111,9 +111,16 @@ func TestMonitoringAndReconnect(t *testing.T) {
 	}
 	s := connect()
 	id := s.Identity()
-	state := readUntil(t, s.State(), "/temperature/chamber")
+	state := readUntil(t, s.State(), connectorapi.BuildVolumeZPath)
 	if string(state["/tools/0/nozzle_temp"]) != "255" || string(state["/job/id"]) != `"task:2285"` {
 		t.Fatalf("wrong state: %s", state)
+	}
+	for path, want := range map[string]string{
+		connectorapi.BuildVolumeXPath: "330", connectorapi.BuildVolumeYPath: "320", connectorapi.BuildVolumeZPath: "325",
+	} {
+		if got := string(state[path]); got != want {
+			t.Errorf("%s = %q, want %s", path, got, want)
+		}
 	}
 	p.disconnect()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)

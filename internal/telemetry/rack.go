@@ -42,13 +42,15 @@ type zoneInfo struct {
 	DryInfo  *numeric `json:"zone_dry_info"`
 }
 type inventory struct {
-	known     bool
-	hc, exist *uint32
-	nozzles   map[int]nozzleInfo
-	trays     map[int]trayInfo
-	zones     map[int]zoneInfo
-	bits      *uint64
-	previous  map[string]json.RawMessage
+	known        bool
+	hc, exist    *uint32
+	nozzles      map[int]nozzleInfo
+	trays        map[int]trayInfo
+	zones        map[int]zoneInfo
+	bits         *uint64
+	amsAbsent    bool
+	previous     map[string]json.RawMessage
+	tempReported [9]bool
 }
 
 func (v *inventory) parse(frame []byte, full bool) ([]connectorapi.StatePatch, error) {
@@ -107,7 +109,9 @@ func (v *inventory) parse(frame []byte, full bool) ([]connectorapi.StatePatch, e
 		clear(v.trays)
 		clear(v.zones)
 		v.hc, v.exist, v.bits = nil, nil, nil
+		v.amsAbsent = false
 	}
+	clear(v.tempReported[:])
 	if n := p.Device.Nozzle; n != nil {
 		v.known = true
 		if n.Info != nil && len(n.Info) == 0 {
@@ -139,6 +143,7 @@ func (v *inventory) parse(frame []byte, full bool) ([]connectorapi.StatePatch, e
 			}
 			if n.Temp != nil {
 				old.Temp = n.Temp
+				v.tempReported[*n.Address] = true
 			}
 			if n.Maximum != nil {
 				old.Maximum = n.Maximum
@@ -153,7 +158,10 @@ func (v *inventory) parse(frame []byte, full bool) ([]connectorapi.StatePatch, e
 				racks++
 			}
 		}
-		if a.Units != nil && racks != 1 {
+		if a.Units != nil {
+			v.amsAbsent = racks != 1
+		}
+		if v.amsAbsent {
 			v.trays = make(map[int]trayInfo)
 			v.zones = make(map[int]zoneInfo)
 			v.bits = nil
@@ -232,6 +240,14 @@ func (v *inventory) parse(frame []byte, full bool) ([]connectorapi.StatePatch, e
 					old.DryInfo = z.DryInfo
 				}
 				v.zones[z.ID] = old
+			}
+		}
+	}
+	if v.amsAbsent {
+		for id, nozzle := range v.nozzles {
+			if nozzle.Source != nil && *nozzle.Source>>8 == 32 {
+				nozzle.Source = nil
+				v.nozzles[id] = nozzle
 			}
 		}
 	}
@@ -315,15 +331,19 @@ func (v *inventory) parse(frame []byte, full bool) ([]connectorapi.StatePatch, e
 		if n.Temp != nil {
 			if current := *n.Temp & 0xffff; current != 65535 {
 				put(connectorapi.ToolPath(head, connectorapi.NozzleTemp), current)
+			} else {
+				put(connectorapi.ToolPath(head, connectorapi.NozzleTemp), nil)
 			}
 			if target := *n.Temp >> 16; target != 65535 {
 				put(connectorapi.ToolPath(head, connectorapi.NozzleTargetTemp), target)
+			} else {
+				put(connectorapi.ToolPath(head, connectorapi.NozzleTargetTemp), nil)
 			}
 		}
 		if n.Source != nil {
 			source := *n.Source
 			unit, slot := source>>8, source&255
-			if unit == 32 && slot < 9 {
+			if unit == 32 && slot < 9 && !v.amsAbsent {
 				put(base+"/source", fmt.Sprintf("ams:32:%d", slot))
 				put(connectorapi.ToolPath(head, connectorapi.FeederSlotCount), 1)
 				put(connectorapi.ToolPath(head, connectorapi.FeederModel), "AMS 3H")

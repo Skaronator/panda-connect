@@ -17,6 +17,7 @@ type modelProfile struct {
 	// Optional features are off unless explicitly reviewed for this model.
 	rackInventory, controls, storage, dispatch bool
 	monitor                                    telemetry.StandardOptions
+	buildVolume                                [3]int
 }
 
 // Candidate products must match ota.product_name exactly. Outside H3C, A1
@@ -25,7 +26,9 @@ type modelProfile struct {
 // an accessory module, or the serial prefix.
 var enabledModels = [...]modelProfile{
 	{product: "Bambu Lab H3C", device: connectorapi.DeviceModel{Model: modelH3C, DisplayName: "Bambu Lab H3C", Vendor: "Bambu Lab"},
-		rackInventory: true, controls: true, storage: true, dispatch: true},
+		rackInventory: true, controls: true, storage: true, dispatch: true,
+		// Nominal dimensions from https://bambulab.com/en-us/h3c/specs.
+		buildVolume: [3]int{330, 320, 325}},
 	monitorCandidate(modelA1Mini, telemetry.StandardOptions{SingleNozzle: true}),
 	monitorCandidate(modelP2S, telemetry.StandardOptions{SingleNozzle: true, AllowUnmarkedSnapshot: true, PackedTemps: true}),
 	monitorCandidate("A1", telemetry.StandardOptions{SingleNozzle: true, AllowUnmarkedSnapshot: true}),

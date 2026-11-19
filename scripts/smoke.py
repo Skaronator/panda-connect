@@ -57,6 +57,10 @@ def check(args):
         if state["/state"] in ("PRINTING", "PAUSED") and state.get("/job/id"):
             if not printer.get("job", {}).get("running"):
                 raise RuntimeError("The host closed a job that is still printing or paused")
+        if not monitor:
+            volume = [state.get(f"/build_volume/{axis}") for axis in "xyz"]
+            if volume != [330, 320, 325]:
+                raise RuntimeError(f"Unexpected H3C build volume: {volume}")
         reply = json.loads(request(
             f'/api/v1/devices/{printer["id"]}/commands',
             {"verb": refresh},
@@ -70,6 +74,8 @@ def check(args):
             "bed_c": state["/temperature/bed"],
             "job_id": state.get("/job/id"),
             "progress": state.get("/job/progress"),
+            "chamber_target_c": state.get("/temperature/chamber_target"),
+            "chamber_light_percent": state.get("/chamber/led_intensity"),
             "refresh": "ok",
         }, indent=2))
         if args.acceptance and not monitor:
@@ -112,6 +118,14 @@ def acceptance(printer):
         raise RuntimeError("Missing H3C rack topology")
     if not all(isinstance(value, bool) for value in slots):
         raise RuntimeError("AMS 3H slot presence is incomplete (requires unit 32)")
+    for head in range(9):
+        source = state.get(f"/bambu/printtools/{head}/source")
+        if source is not None and (
+            not isinstance(source, str)
+            or not re.fullmatch(r"ams:32:[0-8]", source)
+            or state.get(f"/tools/{head}.0/enabled") is not True
+        ):
+            raise RuntimeError(f"Head {head} has a missing or inconsistent physical feeder link")
 
     storages = json.loads(request(prefix + "/storages?refresh=true"))
     deadline = time.monotonic() + 15

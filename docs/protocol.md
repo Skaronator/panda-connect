@@ -49,16 +49,29 @@ interrupted upload can leave a partial file. Hardware upload is unverified.
 
 Heads `0`–`8` are PrintTool home `addr_id` values, not the changing mounted/rack
 wire IDs. `/bambu/printtools/{home}` keeps available `connected`, `installed`,
-`mounted`, `type`, and `source` information. The SDK cannot represent a shared
-feeder graph: a known `ams:32:{slot}` source appears as one feeder child
-`{home}.0` under the corresponding head, not as the physical slot number.
+`mounted`, `type`, and `source` information. The `source` value `ams:32:{slot}`
+identifies the physical slot. The stock tool tree shows a linked slot as the
+head's child `{home}.0`; the child ID is not the physical slot number.
 Read `/bambu/ams/32/slots/{slot}` and `/bambu/ams/32/zones/{zone}` for physical
 presence, material and zone readings. Missing means unknown, not zero or empty;
 a reported clear presence bit means empty. Deltas retain omitted fields and
 full reports replace the inventory. Conflicting mounted indications produce
 no unique `/bambu/active_tool`; missing source links are never inferred from
 head order. Mounted temperatures come from packed extruder telemetry when
-available, not the legacy scalar for a possibly racked nozzle.
+available, not the legacy scalar for a possibly racked nozzle. When unit 32
+disappears, Panda clears its routes and waits for a new nozzle report before
+restoring them.
+
+## Chamber and build volume
+
+Panda publishes Bambu Lab's [nominal H3C build volume](https://bambulab.com/en-us/h3c/specs):
+330 × 320 × 325 mm. Dimensions alone do not validate plate position or tool
+clearance. Panda publishes the chamber target from `device.ctc.info.target`,
+`ctt`, or the upper half of a packed `device.ctc.info.temp`, in that order.
+A scalar chamber temperature does not establish a target. Primary
+`chamber_light` on/off maps to 100/0 at `/chamber/led_intensity` in device state.
+The stock UI does not show a read-only light control. Fan speed is not a fan
+target, and Panda does not advertise chamber controls.
 
 ## Experimental print dispatch
 

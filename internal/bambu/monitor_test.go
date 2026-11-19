@@ -166,6 +166,36 @@ func TestP2SUnmarkedFullAndPackedTemperatures(t *testing.T) {
 	}
 }
 
+func TestP2SReconnectDuringPrint(t *testing.T) {
+	p := startModelFake(t, "P2S-TEST-001", "p2s-version.json", "p2s-idle.synthetic.json")
+	// This is a synthetic status response, not a P2S hardware capture.
+	p.report = []byte(`{"print":{"command":"push_status","gcode_state":"RUNNING","task_id":"72","mc_percent":34,"mc_remaining_time":12,"device":{"bed_temp":3932220,"extruder":{"info":[{"id":0,"temp":14418140}]}}}}`)
+	d := NewDriver(time.Second)
+	var first connectorapi.Identity
+	for i := 0; i < 2; i++ {
+		s, err := d.Connect(t.Context(), p.endpoint, d.Baseline())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = s.Close() })
+		state := readUntil(t, s.State(), "/state")
+		if string(state["/state"]) != `"PRINTING"` || string(state[connectorapi.JobIDPath]) != `"task:72"` ||
+			string(state[connectorapi.JobProgressPath]) != "34" || string(state[connectorapi.JobTimeRemainingPath]) != "720" ||
+			state[connectorapi.BuildVolumeXPath] != nil {
+			t.Fatalf("wrong mid-print report: %s", state)
+		}
+		if i == 0 {
+			first = s.Identity()
+			p.disconnect()
+		} else if s.Identity() != first {
+			t.Fatal("printer identity changed after reconnect")
+		}
+		if err := s.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestA1MiniReplay(t *testing.T) {
 	reader := telemetry.NewStandard(telemetry.StandardOptions{SingleNozzle: true})
 	parse := func(frame []byte, wantFull, wantStatus bool) map[string]string {

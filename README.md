@@ -15,6 +15,8 @@ for other models, start with the [read-only setup](docs/compatibility.md#test-a-
 
 - H3C identification, including firmware and a stable serial-based identity.
 - Live printer state, nozzle/bed/chamber temperatures, and nozzle diameter.
+- Nominal build volume for print compatibility checks. If reported, the
+  chamber target and primary light also appear in device state.
 - Standard host state names (`PRINTING`, `PAUSED`, `FINISHED`) so job history
   stays current; the original vendor state is kept at `/bambu/gcode_state`.
 - Job name, stable local task ID, progress and remaining time in seconds.
@@ -216,11 +218,10 @@ to retry it without recreating the release.
 
 - Driver SDK: `github.com/prusa3d/prusa-connect/sdk v0.1.0-beta.1`
   (Git tag **`sdk/v0.1.0-beta.1`**).
-- Composed server: `github.com/prusa3d/prusa-connect v0.1.0-beta.1`.
-- Both upstream tags resolve to commit
-  `b194cb83b682822e95e839a3cecf4391f3929e87`.
+- Composed server: `github.com/prusa3d/prusa-connect v0.1.0-beta.1.0.20261118080352-ca11b9522aad`.
+  This upstream revision adds chamber target display and history.
 
-`server/` is a separate Go module that imports the released server and this
+`server/` is a separate Go module that imports the upstream server and this
 repository's driver. Its only local replacement is Panda Connect itself. Neither
 the upstream server nor SDK is replaced with a local directory.
 

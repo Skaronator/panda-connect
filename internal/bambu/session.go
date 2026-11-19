@@ -251,6 +251,12 @@ func (s *Session) run() {
 				s.reportSignal = make(chan struct{})
 				s.reportMu.Unlock()
 				if !initial {
+					if model.buildVolume != [3]int{} {
+						for i, path := range [...]string{connectorapi.BuildVolumeXPath, connectorapi.BuildVolumeYPath, connectorapi.BuildVolumeZPath} {
+							value, _ := json.Marshal(model.buildVolume[i])
+							patches = append(patches, connectorapi.StatePatch{Path: path, Value: value})
+						}
+					}
 					close(s.initialState)
 					initial = true
 				}

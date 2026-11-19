@@ -48,6 +48,7 @@ type printReport struct {
 	Bed            *numeric        `json:"bed_temper"`
 	BedTarget      *numeric        `json:"bed_target_temper"`
 	Chamber        *numeric        `json:"chamber_temper"`
+	ChamberTarget  *numeric        `json:"ctt"`
 	PrintError     *numeric        `json:"print_error"`
 	HMS            json.RawMessage `json:"hms"`
 }
@@ -57,7 +58,8 @@ type rackPrintReport struct {
 	Device struct {
 		Chamber struct {
 			Info struct {
-				Temp *numeric `json:"temp"`
+				Temp   *numeric `json:"temp"`
+				Target *numeric `json:"target"`
 			} `json:"info"`
 		} `json:"ctc"`
 		Bed struct {
@@ -72,6 +74,10 @@ type rackPrintReport struct {
 			} `json:"info"`
 		} `json:"extruder"`
 	} `json:"device"`
+	Lights []struct {
+		Node string `json:"node"`
+		Mode string `json:"mode"`
+	} `json:"lights_report"`
 }
 
 // H3C parses status and rack inventory for one H3C connection.
@@ -81,6 +87,8 @@ type H3C struct {
 	initialized                             bool
 	inventory                               inventory
 	packedNozzle                            bool
+	packedHead                              string
+	packedActive                            bool
 }
 
 // Parse applies a report and returns patches and its full/status flags.
@@ -128,6 +136,38 @@ func (t *H3C) Parse(frame []byte) (patches []connectorapi.StatePatch, full, stat
 		}
 	}
 	patches = append(patches, inventoryPatches...)
+	head := "0"
+	if t.inventory.known {
+		head = ""
+		_ = json.Unmarshal(t.inventory.previous["/bambu/active_tool"], &head)
+	}
+	previous := t.packedHead
+	previousIndex, indexErr := strconv.Atoi(previous)
+	rackUpdated := indexErr == nil && previousIndex >= 0 && previousIndex < len(t.inventory.tempReported) && t.inventory.tempReported[previousIndex]
+	clearPacked := t.packedActive && (previous != head || full || rackUpdated)
+	if clearPacked && previous != "" {
+		for _, member := range []string{connectorapi.NozzleTemp, connectorapi.NozzleTargetTemp} {
+			path := connectorapi.ToolPath(connectorapi.ToolID(previous), member)
+			if value, ok := t.inventory.previous[path]; ok {
+				put(path, value)
+			} else {
+				put(path, nil)
+			}
+		}
+	}
+	if clearPacked {
+		t.packedHead = ""
+		t.packedActive = false
+		put("/bambu/active_nozzle_temp", nil)
+		put("/bambu/active_nozzle_target_temp", nil)
+	}
+	putPackedHalf := func(path string, value uint32) {
+		if value == 0xffff {
+			put(path, nil)
+		} else {
+			put(path, value)
+		}
+	}
 	for _, field := range []struct {
 		incoming *string
 		stored   *string
@@ -225,45 +265,69 @@ func (t *H3C) Parse(frame []byte) (patches []connectorapi.StatePatch, full, stat
 		for _, extruder := range p.Device.Extruder.Info {
 			if extruder.ID == 0 && extruder.Temp != nil {
 				t.packedNozzle = true
+				t.packedActive = true
 				current, target := *extruder.Temp&0xffff, *extruder.Temp>>16
-				if current != 65535 {
-					put("/bambu/active_nozzle_temp", current)
-				} else {
-					put("/bambu/active_nozzle_temp", nil)
-				}
-				if target != 65535 {
-					put("/bambu/active_nozzle_target_temp", target)
-				} else {
-					put("/bambu/active_nozzle_target_temp", nil)
-				}
-				head := "0"
-				if t.inventory.known {
-					head = ""
-					if raw, ok := t.inventory.previous["/bambu/active_tool"]; ok {
-						_ = json.Unmarshal(raw, &head)
-					}
-				}
+				putPackedHalf("/bambu/active_nozzle_temp", current)
+				putPackedHalf("/bambu/active_nozzle_target_temp", target)
 				if head != "" {
-					if current != 65535 {
-						put(connectorapi.ToolPath(connectorapi.ToolID(head), connectorapi.NozzleTemp), current)
-					}
-					if target != 65535 {
-						put(connectorapi.ToolPath(connectorapi.ToolID(head), connectorapi.NozzleTargetTemp), target)
-					}
+					t.packedHead = head
+					putPackedHalf(connectorapi.ToolPath(connectorapi.ToolID(head), connectorapi.NozzleTemp), current)
+					putPackedHalf(connectorapi.ToolPath(connectorapi.ToolID(head), connectorapi.NozzleTargetTemp), target)
 				}
 			}
 		}
 	}
 	if packed := p.Device.Bed.Info.Temp; packed != nil {
 		if p.Bed == nil {
-			put("/temperature/bed", *packed&0xffff)
+			putPackedHalf("/temperature/bed", *packed&0xffff)
 		}
 		if p.BedTarget == nil {
-			put("/temperature/bed_target", *packed>>16)
+			putPackedHalf("/temperature/bed_target", *packed>>16)
 		}
 	}
-	if p.Chamber == nil && p.Device.Chamber.Info.Temp != nil {
-		put("/temperature/chamber", float64(*p.Device.Chamber.Info.Temp))
+	chamber := p.Device.Chamber.Info
+	target := chamber.Target
+	if target == nil {
+		target = p.ChamberTarget
+	}
+	if chamber.Temp != nil {
+		value := *chamber.Temp
+		if value >= 0xffff && value <= math.MaxUint32 && math.Trunc(float64(value)) == float64(value) {
+			if p.Chamber == nil {
+				putPackedHalf("/temperature/chamber", uint32(value)&0xffff)
+			}
+			if target == nil && value > 0xffff {
+				packedTarget := numeric(uint32(value) >> 16)
+				target = &packedTarget
+			}
+		} else if p.Chamber == nil {
+			put("/temperature/chamber", value)
+		}
+	}
+	if target != nil && *target >= 0 && *target <= 65 {
+		put("/temperature/chamber_target", *target)
+	} else if full || target != nil {
+		put("/temperature/chamber_target", nil)
+	}
+	// The primary chamber light reports only on/off, never a dimmer value.
+	var light any
+	lightReported := false
+	for _, entry := range p.Lights {
+		if entry.Node == "chamber_light" {
+			lightReported = true
+			switch entry.Mode {
+			case "on":
+				light = 100
+			case "off":
+				light = 0
+			default:
+				light = nil
+			}
+			break
+		}
+	}
+	if lightReported || full {
+		put("/chamber/led_intensity", light)
 	}
 	if len(p.HMS) != 0 {
 		put("/bambu/hms", hms)

@@ -21,6 +21,10 @@ on the same `panda-connect` connector. The two read-only devices advertised only
 status refresh, and the host refused a heater command for each before it could
 reach the printer. H3C still advertised its heater control.
 
+A synthetic P2S print report also exercises reconnect through the MQTT fake.
+It checks that the printer identity, job ID, progress and remaining time are
+the same after reconnect. This is not a P2S hardware capture.
+
 ## Model inventory
 
 This is the union of the [US comparison catalog][catalog] and the base machine

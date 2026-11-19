@@ -74,6 +74,38 @@ func TestInventoryDeltaRemovalAndReconnect(t *testing.T) {
 	}
 	_ = patches
 }
+
+func TestH3CFeederRouting(t *testing.T) {
+	var parser H3C
+	check := func(frame []byte, expected map[string]string) {
+		t.Helper()
+		patches, _, _, err := parser.Parse(frame)
+		if err != nil {
+			t.Fatal(err)
+		}
+		values := patchValues(patches)
+		for path, want := range expected {
+			if values[path] != want {
+				t.Errorf("%s = %q, want %q", path, values[path], want)
+			}
+		}
+	}
+	check(fixture(t, "h3c-inventory.json"), map[string]string{
+		"/bambu/printtools/0/source": `"ams:32:0"`, "/bambu/printtools/8/source": `"ams:32:8"`,
+		"/tools/8.0/material_package_instance/package/material/type": `"PETG"`,
+	})
+	check([]byte(`{"print":{"command":"push_status","msg":1,"device":{"nozzle":{"info":[{"addr_id":8,"snow":8192}]}}}}`), map[string]string{
+		"/bambu/printtools/8/source":                                 `"ams:32:0"`,
+		"/tools/8.0/material_package_instance/package/material/type": `"PLA"`,
+	})
+	check([]byte(`{"print":{"command":"push_status","msg":1,"device":{"nozzle":{"info":[{"addr_id":8,"snow":255}]}}}}`), map[string]string{
+		"/bambu/printtools/8/source": "null", "/bambu/printtools/0/source": "",
+		"/tools/8.0/enabled": "null",
+	})
+	check([]byte(`{"print":{"command":"push_status","msg":0}}`), map[string]string{
+		"/bambu/printtools/0/source": "null", "/bambu/ams/32/slots/0/present": "null",
+	})
+}
 func TestPackedNozzleWinsOverStaleScalar(t *testing.T) {
 	var parser H3C
 	_, _, _, _ = parser.Parse(fixture(t, "h3c-running.json"))
@@ -85,6 +117,41 @@ func TestPackedNozzleWinsOverStaleScalar(t *testing.T) {
 	if patchValues(patches)["/tools/0/nozzle_temp"] != "205" {
 		b, _ := json.Marshal(patches)
 		t.Fatal(string(b))
+	}
+}
+
+func TestUnavailableRackReadingClearsExtruderProjection(t *testing.T) {
+	var parser H3C
+	for i, frame := range []string{
+		`{"print":{"command":"push_status","msg":0,"device":{"nozzle":{"info":[{"id":0,"addr_id":8,"temp":4294967295}]},"extruder":{"info":[{"id":0,"temp":14418125}]}}}}`,
+		`{"print":{"command":"push_status","msg":1,"device":{"nozzle":{"info":[{"id":0,"addr_id":8,"temp":4294967295}]}}}}`,
+	} {
+		patches, _, _, err := parser.Parse([]byte(frame))
+		if err != nil {
+			t.Fatal(err)
+		}
+		values := patchValues(patches)
+		if values["/tools/8/nozzle_temp"] != [...]string{"205", "null"}[i] ||
+			values["/tools/8/nozzle_target_temp"] != [...]string{"220", "null"}[i] ||
+			values["/bambu/active_nozzle_temp"] != [...]string{"205", "null"}[i] {
+			t.Fatalf("frame %d: %v", i, values)
+		}
+	}
+}
+
+func TestNewFullReportClearsUnassignedExtruderReading(t *testing.T) {
+	var parser H3C
+	first := []byte(`{"print":{"command":"push_status","msg":0,"device":{"nozzle":{"info":[{"id":24,"addr_id":8}]},"extruder":{"info":[{"id":0,"temp":14418125}]}}}}`)
+	patches, _, _, err := parser.Parse(first)
+	if err != nil || patchValues(patches)["/bambu/active_nozzle_temp"] != "205" {
+		t.Fatalf("initial active extruder reading: %v, %v", patchValues(patches), err)
+	}
+	second := []byte(`{"print":{"command":"push_status","msg":0,"device":{"nozzle":{"info":[{"id":0,"addr_id":8}]}}}}`)
+	patches, _, _, err = parser.Parse(second)
+	values := patchValues(patches)
+	if err != nil || values["/bambu/active_tool"] != `"8"` ||
+		values["/bambu/active_nozzle_temp"] != "null" || values["/bambu/active_nozzle_target_temp"] != "null" {
+		t.Fatalf("replacement active extruder reading: %v, %v", values, err)
 	}
 }
 
@@ -118,7 +185,22 @@ func TestAmbiguousTrayAndRemovedAMSInvalidateMaterial(t *testing.T) {
 		t.Fatalf("ambiguous tray stayed mapped: %v", err)
 	}
 	patches, _, _, err = parser.Parse([]byte(`{"print":{"command":"push_status","ams":{"ams":[{"id":"1"}]}}}`))
-	if err != nil || patchValues(patches)["/bambu/ams/32/slots/8/present"] != "null" {
+	values := patchValues(patches)
+	if err != nil || values["/bambu/ams/32/slots/8/present"] != "null" ||
+		values["/tools/8.0/enabled"] != "null" ||
+		values["/bambu/printtools/8/source"] != "null" {
 		t.Fatalf("missing AMS kept its data: %v", err)
+	}
+	patches, _, _, err = parser.Parse([]byte(`{"print":{"command":"push_status","device":{"nozzle":{"info":[{"addr_id":8,"snow":8192}]}}}}`))
+	if err != nil || patchValues(patches)["/bambu/printtools/8/source"] != "" {
+		t.Fatalf("absent AMS accepted a nozzle-only route: %v, %v", patchValues(patches), err)
+	}
+	patches, _, _, err = parser.Parse([]byte(`{"print":{"command":"push_status","ams":{"ams":[{"id":"32","tray":[{"id":"8","tray_type":"PETG"}]}]}}}`))
+	if err != nil || patchValues(patches)["/bambu/printtools/8/source"] != "" {
+		t.Fatalf("reattached AMS restored an old route: %v, %v", patchValues(patches), err)
+	}
+	patches, _, _, err = parser.Parse([]byte(`{"print":{"command":"push_status","device":{"nozzle":{"info":[{"addr_id":8,"snow":8200}]}}}}`))
+	if err != nil || patchValues(patches)["/bambu/printtools/8/source"] != `"ams:32:8"` {
+		t.Fatalf("fresh nozzle report did not restore the route: %v, %v", patchValues(patches), err)
 	}
 }

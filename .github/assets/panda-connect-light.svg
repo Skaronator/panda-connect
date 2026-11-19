@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="432" height="104" viewBox="0 0 432 104" role="img" aria-labelledby="title">
+  <title id="title">Panda Connect</title>
+  <g stroke="#18232d" stroke-width="3">
+    <circle cx="29" cy="30" r="13" fill="#18232d"/>
+    <circle cx="79" cy="30" r="13" fill="#18232d"/>
+    <path d="M16 57c0-20 16-33 38-33s38 13 38 33c0 18-15 29-38 29S16 75 16 57Z" fill="#fff"/>
+  </g>
+  <g fill="#18232d">
+    <ellipse cx="37" cy="54" rx="8" ry="11" transform="rotate(28 37 54)"/>
+    <ellipse cx="71" cy="54" rx="8" ry="11" transform="rotate(-28 71 54)"/>
+    <path d="M49 66c0-3 10-3 10 0 0 2-3 4-5 4s-5-2-5-4Z"/>
+  </g>
+  <circle cx="39" cy="52" r="2" fill="#fff"/>
+  <circle cx="69" cy="52" r="2" fill="#fff"/>
+  <circle cx="87" cy="77" r="16" fill="#007a5c" stroke="#fff" stroke-width="2.5"/>
+  <g fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round">
+    <path d="M84 76l4-4a3.5 3.5 0 0 1 5 5l-2 2m-1-1-4 4a3.5 3.5 0 0 1-5-5l2-2"/>
+  </g>
+  <text x="120" y="67" fill="#18232d" font-family="system-ui, sans-serif" font-size="40" font-weight="700">Panda <tspan fill="#007a5c">Connect</tspan></text>
+</svg>

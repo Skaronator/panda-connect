@@ -1,0 +1,21 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "packageRules": [
+    {
+      "description": "Limit updates to Prusa Connect",
+      "matchPackageNames": ["*"],
+      "enabled": false
+    },
+    {
+      "description": "Keep the Prusa Connect server and SDK updates together",
+      "matchPackageNames": [
+        "github.com/prusa3d/prusa-connect",
+        "github.com/prusa3d/prusa-connect/sdk"
+      ],
+      "enabled": true,
+      "groupName": "Prusa Connect",
+      "ignoreUnstable": false
+    }
+  ]
+}

@@ -4,10 +4,15 @@ WORKDIR /src/panda-connect
 COPY go.mod go.sum ./
 COPY server/go.mod server/go.sum ./server/
 RUN go mod download && cd server && go mod download
-# The Go module zip excludes nested modules needed by the frontend. Fetch the
-# full source at the server module's pinned commit, with a checksum.
-ADD --checksum=sha256:5b6a555c0846207f9af753607c5bf6a08e310abdc8e464b0a8c68b88697fa0ff https://codeload.github.com/prusa3d/prusa-connect/tar.gz/ca11b9522aad2a0e15a6c0441c9ab0782d9e890a /tmp/prusa-connect.tar.gz
-RUN mkdir /src/prusa-connect && tar -xzf /tmp/prusa-connect.tar.gz --strip-components=1 -C /src/prusa-connect
+# The Go module zip excludes nested modules needed by the frontend. Resolve the
+# selected module version to its full Git commit and fetch that exact tree.
+RUN version="$(cd server && go list -m -f '{{.Version}}' github.com/prusa3d/prusa-connect)" && \
+    commit="$(cd server && GOPROXY=direct go list -m -json "github.com/prusa3d/prusa-connect@${version}" | sed -n 's/^[[:space:]]*"Hash": "\([0-9a-f]*\)".*/\1/p')" && \
+    test "${#commit}" -eq 40 && \
+    git init -q /src/prusa-connect && \
+    git -C /src/prusa-connect fetch -q --depth=1 https://github.com/prusa3d/prusa-connect.git "$commit" && \
+    git -C /src/prusa-connect checkout -q --detach FETCH_HEAD && \
+    test "$(git -C /src/prusa-connect rev-parse HEAD)" = "$commit"
 
 # Only static assets leave this stage, so run Node natively rather than under QEMU.
 FROM --platform=$BUILDPLATFORM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS frontend
@@ -30,7 +35,9 @@ FROM dependencies AS builder
 COPY . .
 # Go embeds assets from its downloaded dependency. Only this image's private
 # module cache is changed; neither dependency is replaced with a local checkout.
-COPY --from=frontend /src/prusa-connect/frontend/dist /go/pkg/mod/github.com/prusa3d/prusa-connect@v0.1.0-beta.1.0.20261118080352-ca11b9522aad/internal/transport/http/httpapi/appdist
+COPY --from=frontend /src/prusa-connect/frontend/dist /tmp/prusa-connect-frontend
+RUN module_dir="$(cd server && go list -m -f '{{.Dir}}' github.com/prusa3d/prusa-connect)" && \
+    cp -a /tmp/prusa-connect-frontend/. "$module_dir/internal/transport/http/httpapi/appdist/"
 ENV CGO_ENABLED=0
 RUN --mount=type=cache,target=/root/.cache/go-build \
     go build -trimpath -o /out/panda-connect-init ./cmd/panda-connect-init && \

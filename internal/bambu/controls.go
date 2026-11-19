@@ -18,7 +18,7 @@ const (
 	VerbNozzleTemperature connectorapi.Capability = "core.command.set_nozzle_temperature"
 	VerbBedTemperature    connectorapi.Capability = "core.command.set_bed_temperature"
 	VerbStartPrint        connectorapi.Capability = "core.command.start_print"
-	// Manufacturer's H3C limits, not the legacy P1/X1 limits. See docs/protocol.md.
+	// Manufacturer's H3C limits, not the legacy P1/X1 limits. See README.md#h3c-controls.
 	MaxNozzleTemperature = telemetry.H3CMaxNozzleTemperature
 	MaxBedTemperature    = 120
 )

@@ -4,6 +4,8 @@ github.com/gorilla/websocket v1.5.3 h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aN
 github.com/gorilla/websocket v1.5.3/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/prusa3d/prusa-connect/sdk v0.1.0-beta.1 h1:nSlvXDOWl4cVSuLG7EeCWKgxpFkY6Tbdpvrr5+76OZY=
 github.com/prusa3d/prusa-connect/sdk v0.1.0-beta.1/go.mod h1:2XmDJsoDN1xJ5YzGnRJQTmHSRGGD8a9Njx/UiezPABw=
+github.com/prusa3d/prusa-connect/sdk v0.1.0-beta.2 h1:KvtU7tC8bXwnDlMiKWzKQGj2qY/V5T+qK5t53+ugo38=
+github.com/prusa3d/prusa-connect/sdk v0.1.0-beta.2/go.mod h1:2XmDJsoDN1xJ5YzGnRJQTmHSRGGD8a9Njx/UiezPABw=
 golang.org/x/net v0.44.0 h1:evd8IRDyfNBMBTTY5XRF1vaZlD+EmWx6x8PkhR04H/I=
 golang.org/x/net v0.44.0/go.mod h1:ECOoLqd5U3Lhyeyo/QDCEVQ4sNgYsqvCZ722XogGieY=
 golang.org/x/sync v0.17.0 h1:l60nONMj9l5drqw6jlhIELNv9I0A4OFgRsG9k2oT9Ug=
